@@ -1,0 +1,37 @@
+# ── secrets / local machine config ──────────────────────────────
+go_review/config.json
+go_review/config.local.json
+/config.txt
+/persist
+
+# ── personal game data (each user brings their own) ─────────────
+My games/*
+!My games/fox_full_downloader.py
+!My games/foxwq_downloader.ipynb
+
+# ── generated / personal reports (keep go_review/demo/) ─────────
+go_review/output_*/
+go_review/yehu_*/
+go_review/new_report/
+go_review/index.html
+output_local_*_backup/
+site/
+
+# ── engines & large binaries (download separately) ──────────────
+ikatago-*/
+2023-06-15-*/
+KataGo/
+*.zip
+*.app/
+
+# ── personal / business documents ──────────────────────────────
+一目弈镜_小程序落地方案_个人主体.md
+
+# ── python / jupyter / OS cruft ─────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+.DS_Store
+.venv/
+venv/

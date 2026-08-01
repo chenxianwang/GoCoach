@@ -1,0 +1,25 @@
+{
+  "ikatago_command": "\"/path/to/ikatago\" --platform all --username ${IKATAGO_USERNAME} --password ${IKATAGO_PASSWORD}",
+  "games_dirs": [],
+  "user_names": [
+    "yourFoxNickname"
+  ],
+  "default_fox_uid": "",
+  "default_games_subdir": "",
+  "default_import_target": "",
+  "lizzie_jar": "",
+  "whisper_model": "~/Desktop/models/faster-whisper-medium",
+  "whisper_language": "en",
+  "voice_audio_dir": "~/Desktop/English Coach/VideoAudioFiles",
+  "deepseek_api_key": "",
+  "deepseek_base_url": "https://api.deepseek.com",
+  "deepseek_model": "deepseek-v4-pro",
+  "output_dir": "output_demo",
+  "num_games": 10,
+  "max_visits": 300,
+  "max_time_per_move": 1.0,
+  "max_moves_per_game": 0,
+  "mistake_threshold": 2.0,
+  "blunder_threshold": 6.0,
+  "ready_timeout": 20
+}

@@ -1,0 +1,77 @@
+<svg width="512" height="512" viewBox="0 0 512 512" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>围棋 AI 复盘小程序头像</title>
+<desc>深蓝墨色背景,中央一颗白色围棋子,外圈青绿色 AI 分析光环,右上方一个发光的最佳落点,底层有淡淡的棋盘格。</desc>
+<defs>
+<radialGradient id="bg" cx="50%" cy="33%" r="82%">
+<stop offset="0%" stop-color="#1d4d80"/>
+<stop offset="52%" stop-color="#103155"/>
+<stop offset="100%" stop-color="#071529"/>
+</radialGradient>
+<radialGradient id="st" cx="38%" cy="30%" r="85%">
+<stop offset="0%" stop-color="#ffffff"/>
+<stop offset="55%" stop-color="#e8eff7"/>
+<stop offset="100%" stop-color="#bdc9d9"/>
+</radialGradient>
+<radialGradient id="ng" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="#9bffdd" stop-opacity="0.95"/>
+<stop offset="45%" stop-color="#23d4a3" stop-opacity="0.6"/>
+<stop offset="100%" stop-color="#23d4a3" stop-opacity="0"/>
+</radialGradient>
+<radialGradient id="bng" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="#8cc2ff" stop-opacity="0.9"/>
+<stop offset="100%" stop-color="#3f8bff" stop-opacity="0"/>
+</radialGradient>
+<filter id="glow" x="-70%" y="-70%" width="240%" height="240%">
+<feGaussianBlur stdDeviation="9"/>
+</filter>
+<clipPath id="rc"><rect x="0" y="0" width="512" height="512" rx="108"/></clipPath>
+</defs>
+
+<g clip-path="url(#rc)">
+<rect x="0" y="0" width="512" height="512" fill="url(#bg)"/>
+<g stroke="#3f74b0" stroke-width="2" opacity="0.16">
+<line x1="104" y1="104" x2="104" y2="408"/>
+<line x1="155" y1="104" x2="155" y2="408"/>
+<line x1="205" y1="104" x2="205" y2="408"/>
+<line x1="256" y1="104" x2="256" y2="408"/>
+<line x1="307" y1="104" x2="307" y2="408"/>
+<line x1="357" y1="104" x2="357" y2="408"/>
+<line x1="408" y1="104" x2="408" y2="408"/>
+<line x1="104" y1="104" x2="408" y2="104"/>
+<line x1="104" y1="155" x2="408" y2="155"/>
+<line x1="104" y1="205" x2="408" y2="205"/>
+<line x1="104" y1="256" x2="408" y2="256"/>
+<line x1="104" y1="307" x2="408" y2="307"/>
+<line x1="104" y1="357" x2="408" y2="357"/>
+<line x1="104" y1="408" x2="408" y2="408"/>
+</g>
+<g fill="#3f74b0" opacity="0.3">
+<circle cx="155" cy="155" r="4"/>
+<circle cx="357" cy="155" r="4"/>
+<circle cx="155" cy="357" r="4"/>
+<circle cx="357" cy="357" r="4"/>
+</g>
+
+<circle cx="256" cy="252" r="150" fill="none" stroke="#23d4a3" stroke-width="9" opacity="0.45" filter="url(#glow)"/>
+<circle cx="256" cy="252" r="150" fill="none" stroke="#34e3b2" stroke-width="3.5" opacity="0.9"/>
+<path d="M256 102 A150 150 0 0 1 367 152" fill="none" stroke="#aaffe6" stroke-width="5" stroke-linecap="round" opacity="0.95"/>
+
+<circle cx="256" cy="252" r="121" fill="#0c2138" opacity="0.55"/>
+<circle cx="256" cy="252" r="120" fill="url(#st)"/>
+<circle cx="256" cy="252" r="120" fill="none" stroke="#9fb0c4" stroke-width="1.5" opacity="0.4"/>
+<ellipse cx="214" cy="206" rx="52" ry="34" fill="#ffffff" opacity="0.55"/>
+
+<circle cx="126" cy="330" r="22" fill="url(#bng)"/>
+<circle cx="126" cy="330" r="8" fill="#a9d2ff"/>
+
+<circle cx="367" cy="152" r="40" fill="url(#ng)" filter="url(#glow)"/>
+<circle cx="367" cy="152" r="16" fill="#62f6cd"/>
+<circle cx="367" cy="152" r="7.5" fill="#ffffff"/>
+<g fill="#eafffb" opacity="0.95">
+<path d="M367 120 L371 148 L367 152 L363 148 Z"/>
+<path d="M367 184 L371 156 L367 152 L363 156 Z"/>
+<path d="M335 152 L363 148 L367 152 L363 156 Z"/>
+<path d="M399 152 L371 148 L367 152 L371 156 Z"/>
+</g>
+</g>
+</svg>

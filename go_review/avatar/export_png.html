@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>头像导出 PNG</title>
+<style>
+  body{font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;background:#f3f5f8;
+       color:#1a202c;max-width:760px;margin:0 auto;padding:28px;line-height:1.6}
+  h1{font-size:20px}
+  .preview{display:flex;gap:24px;align-items:center;flex-wrap:wrap;margin:18px 0}
+  .chip{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center}
+  .chip img{display:block;border-radius:18%}
+  .chip .cap{font-size:12px;color:#718096;margin-top:8px}
+  .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+  button{font:inherit;font-size:14px;cursor:pointer;border:1px solid #2b6cb0;
+         background:#2b6cb0;color:#fff;border-radius:8px;padding:8px 14px}
+  button.alt{background:#fff;color:#2b6cb0}
+  .note{font-size:13px;color:#718096}
+  label{font-size:13px;color:#4a5568;margin-right:14px}
+</style>
+</head>
+<body>
+<h1>围棋 AI 复盘 · 小程序头像导出</h1>
+<p class="note">点下面的按钮即可把头像保存为 PNG。微信小程序头像建议上传正方形 PNG;
+显示时通常会自动裁成圆形,所以四角的圆角不影响。</p>
+
+<div class="preview">
+  <div class="chip">
+    <img id="pv" width="200" height="200" alt="预览">
+    <div class="cap">预览(圆角方形)</div>
+  </div>
+  <div>
+    <label><input type="checkbox" id="solid"> 用方形深底填满四角(不要圆角)</label>
+    <div class="btns">
+      <button onclick="dl(144)">下载 144×144</button>
+      <button onclick="dl(256)">下载 256×256</button>
+      <button onclick="dl(512)">下载 512×512</button>
+      <button class="alt" onclick="dl(1024)">下载 1024×1024</button>
+    </div>
+  </div>
+</div>
+
+<script type="text/plain" id="svgsrc"><svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<radialGradient id="bg" cx="50%" cy="33%" r="82%">
+<stop offset="0%" stop-color="#1d4d80"/>
+<stop offset="52%" stop-color="#103155"/>
+<stop offset="100%" stop-color="#071529"/>
+</radialGradient>
+<radialGradient id="st" cx="38%" cy="30%" r="85%">
+<stop offset="0%" stop-color="#ffffff"/>
+<stop offset="55%" stop-color="#e8eff7"/>
+<stop offset="100%" stop-color="#bdc9d9"/>
+</radialGradient>
+<radialGradient id="ng" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="#9bffdd" stop-opacity="0.95"/>
+<stop offset="45%" stop-color="#23d4a3" stop-opacity="0.6"/>
+<stop offset="100%" stop-color="#23d4a3" stop-opacity="0"/>
+</radialGradient>
+<radialGradient id="bng" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="#8cc2ff" stop-opacity="0.9"/>
+<stop offset="100%" stop-color="#3f8bff" stop-opacity="0"/>
+</radialGradient>
+<filter id="glow" x="-70%" y="-70%" width="240%" height="240%">
+<feGaussianBlur stdDeviation="9"/>
+</filter>
+<clipPath id="rc"><rect x="0" y="0" width="512" height="512" rx="108"/></clipPath>
+</defs>
+<g clip-path="url(#rc)">
+<rect x="0" y="0" width="512" height="512" fill="url(#bg)"/>
+<g stroke="#3f74b0" stroke-width="2" opacity="0.16">
+<line x1="104" y1="104" x2="104" y2="408"/>
+<line x1="155" y1="104" x2="155" y2="408"/>
+<line x1="205" y1="104" x2="205" y2="408"/>
+<line x1="256" y1="104" x2="256" y2="408"/>
+<line x1="307" y1="104" x2="307" y2="408"/>
+<line x1="357" y1="104" x2="357" y2="408"/>
+<line x1="408" y1="104" x2="408" y2="408"/>
+<line x1="104" y1="104" x2="408" y2="104"/>
+<line x1="104" y1="155" x2="408" y2="155"/>
+<line x1="104" y1="205" x2="408" y2="205"/>
+<line x1="104" y1="256" x2="408" y2="256"/>
+<line x1="104" y1="307" x2="408" y2="307"/>
+<line x1="104" y1="357" x2="408" y2="357"/>
+<line x1="104" y1="408" x2="408" y2="408"/>
+</g>
+<g fill="#3f74b0" opacity="0.3">
+<circle cx="155" cy="155" r="4"/>
+<circle cx="357" cy="155" r="4"/>
+<circle cx="155" cy="357" r="4"/>
+<circle cx="357" cy="357" r="4"/>
+</g>
+<circle cx="256" cy="252" r="150" fill="none" stroke="#23d4a3" stroke-width="9" opacity="0.45" filter="url(#glow)"/>
+<circle cx="256" cy="252" r="150" fill="none" stroke="#34e3b2" stroke-width="3.5" opacity="0.9"/>
+<path d="M256 102 A150 150 0 0 1 367 152" fill="none" stroke="#aaffe6" stroke-width="5" stroke-linecap="round" opacity="0.95"/>
+<circle cx="256" cy="252" r="121" fill="#0c2138" opacity="0.55"/>
+<circle cx="256" cy="252" r="120" fill="url(#st)"/>
+<circle cx="256" cy="252" r="120" fill="none" stroke="#9fb0c4" stroke-width="1.5" opacity="0.4"/>
+<ellipse cx="214" cy="206" rx="52" ry="34" fill="#ffffff" opacity="0.55"/>
+<circle cx="126" cy="330" r="22" fill="url(#bng)"/>
+<circle cx="126" cy="330" r="8" fill="#a9d2ff"/>
+<circle cx="367" cy="152" r="40" fill="url(#ng)" filter="url(#glow)"/>
+<circle cx="367" cy="152" r="16" fill="#62f6cd"/>
+<circle cx="367" cy="152" r="7.5" fill="#ffffff"/>
+<g fill="#eafffb" opacity="0.95">
+<path d="M367 120 L371 148 L367 152 L363 148 Z"/>
+<path d="M367 184 L371 156 L367 152 L363 156 Z"/>
+<path d="M335 152 L363 148 L367 152 L363 156 Z"/>
+<path d="M399 152 L371 148 L367 152 L371 156 Z"/>
+</g>
+</g>
+</svg></script>
+
+<script>
+const SVG = document.getElementById('svgsrc').textContent;
+// square version (no rounded clip, deep solid corners) for "fill corners" option
+const SVG_SQUARE = SVG.replace('clip-path="url(#rc)"', '').replace(
+  '<rect x="0" y="0" width="512" height="512" fill="url(#bg)"/>',
+  '<rect x="0" y="0" width="512" height="512" fill="#071529"/><rect x="0" y="0" width="512" height="512" fill="url(#bg)"/>');
+
+function url(square){
+  const s = square ? SVG_SQUARE : SVG;
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s);
+}
+function render(size, square){
+  return new Promise((res)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const c = document.createElement('canvas');
+      c.width = size; c.height = size;
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0,0,size,size);
+      ctx.drawImage(img,0,0,size,size);
+      res(c);
+    };
+    img.src = url(square);
+  });
+}
+async function dl(size){
+  const square = document.getElementById('solid').checked;
+  const c = await render(size, square);
+  const a = document.createElement('a');
+  a.download = `go_review_avatar_${size}.png`;
+  a.href = c.toDataURL('image/png');
+  a.click();
+}
+render(200,false).then(c=>{ document.getElementById('pv').src = c.toDataURL('image/png'); });
+document.getElementById('solid').addEventListener('change', e=>{
+  render(200, e.target.checked).then(c=>{ document.getElementById('pv').src = c.toDataURL('image/png'); });
+});
+</script>
+</body>
+</html>
