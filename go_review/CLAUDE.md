@@ -15,10 +15,20 @@ new session — read it first.
 
 - Start the app (opens a browser to the sidebar shell):
   `cd /Users/chenxianwang/Desktop/ClaudeCode-Go/go_review && python3 web_app.py`
+- **`report.py` and `web_app.py` are now packages** (`report/`, `webapp/`), split by
+  concern in 2026-08 — each used to be a single 3-4k line file. `web_app.py` itself
+  is now just a thin launcher (`sys.path` bootstrap + `from webapp.server import
+  main`); all routes/pages/jobs live under `webapp/*.py`. Every name that used to be
+  `report.X` or reachable from `web_app.py` is unchanged from the outside — only the
+  internal file layout moved. See "Layout & key files" below for the new module map.
 - **The server is long-running. It does NOT hot-reload.**
-  - Edited `web_app.py` (routes/pages/APIs/form defaults) → **restart the server**.
-  - Edited `report.py` (report HTML/JS/CSS) → **rebuild the affected report(s)**;
+  - Edited any `webapp/*.py` (routes/pages/APIs/form defaults) → **restart the server**.
+  - Edited any `report/*.py` (report HTML/JS/CSS) → **rebuild the affected report(s)**;
     served reports are static `review_report.html` files read from disk.
+    `_reload_app_modules` (in `webapp/config_jobs.py`, used by the Analyse/Import
+    flow) reloads every `report.*` submodule in dependency order, then the `report`
+    package itself, before rebuilding — reloading just `sys.modules["report"]` would
+    only re-run `report/__init__.py` and miss edits inside the submodules.
   - Changed `config.json` → no restart needed (`_safe_cfg()` re-reads it each call).
 - Rebuild a report from the shell:
   ```
@@ -45,32 +55,69 @@ new session — read it first.
 
 ## Layout & key files
 
-- `web_app.py` — the server. Sidebar shell (`dashboard_page`), pages: `analyze_page`,
-  `compare_page`, `summary_page`, `terms_page` (`/terms`), report serving
-  `render_report` (`/r/<rel>`).
-  APIs: `/api/reports`, `/api/board` (lazy full-board SVG), `/api/notes` + `/api/note`,
-  `/api/summary_export` (all versions as one Markdown download), `/api/backup`,
-  `/api/practice_hidden` + `/api/practice_hide`, `/api/practice_clear`, `/api/voice`
-  (GET/POST), `/api/summary` (GET cached / POST generate), `/api/transcribe`,
-  `/api/delete`, `/api/analyze` + `/api/job/*`. Also: DeepSeek call (`_call_deepseek`,
-  `_summary_system`, `_summary_input`, `build_review_summary`), local Whisper
-  (`transcribe_audio`, `_get_whisper`), markdown→HTML (`_md_to_html`), config
-  (`_safe_cfg`, `set_default_config`), `_report_metrics`. Terms page assets:
-  `TERMS_CSS`, `TERMS_JS`.
+- `web_app.py` — thin entry point only: puts `go_review/` on `sys.path`, then
+  `from webapp.server import main`. All real server code lives in `webapp/`
+  (imported as plain sibling modules — `pipeline`, `report`, `import_lizzie`,
+  `go_terms` — since `go_review/` is already on `sys.path` by the time any
+  `webapp/*.py` runs):
+  - `webapp/paths.py` — `HERE` (resolved as `dirname(dirname(this file))` since
+    `webapp/` sits one level below `go_review/`; every other module gets `HERE`
+    from here, not by recomputing `__file__`).
+  - `webapp/htmlutil.py` — `_esc`, kept dependency-free at the bottom of the
+    import graph (both `shell` and `static_export` need it, and `static_export`
+    sits below `shell` — see `config_jobs`/`shell` note below).
+  - `webapp/jobs.py` — `Job`, `JobManager`, the `JOBS` singleton.
+  - `webapp/listing.py` — `list_reports`, `list_games_dirs`, `report_dir_from_rel`,
+    `report_summary` (+ its `_SUMMARY_CACHE`).
+  - `webapp/assets.py` — the CSS/JS string constants (`PAGE_CSS`, `SHELL_CSS`,
+    `SHELL_JS`, `ANALYSIS_MODULE`, `TERMS_CSS`, `TERMS_JS`, `SUMMARY_CSS`,
+    `SUMMARY_JS`, `COMPARE_CSS`, `STATIC_CSS`).
+  - `webapp/shell.py` — sidebar shell (`dashboard_page`), `analyze_page`,
+    `_analysis_module_html`, `_page`.
+  - `webapp/compare.py` — `compare_page`, `_report_metrics`.
+  - `webapp/pages_misc.py` — `summary_page`, `terms_page` (`/terms`).
+  - `webapp/static_export.py` — `write_static_index` / `build_static_index` (the
+    offline `index.html` viewer).
+  - `webapp/report_serve.py` — `render_report` (`/r/<rel>`).
+  - `webapp/config_jobs.py` — `_safe_cfg`, `_reload_app_modules`, `do_analyze`,
+    `do_import`, `set_default_config`. **`_reload_app_modules` reloads every
+    `report.*` submodule (in dependency order) before the `report` package
+    itself** — see the hot-reload note above; this is the one place that
+    matters if the reload logic ever needs to change again.
+  - `webapp/board_api.py` — `render_board_svg` (`/api/board`, lazy full-board SVG).
+  - `webapp/voice.py` — voice recording, local Whisper (`transcribe_audio`,
+    `_get_whisper`), the English Coach filing convention.
+  - `webapp/state.py` — per-report `notes.json` / `review_voice.md` /
+    `practice_hidden.json` load/save.
+  - `webapp/summary_engine.py` — DeepSeek call (`_call_deepseek`,
+    `_summary_system`, `_summary_input`, `build_review_summary`), the summary
+    archive (`archive_summary`, `list_summaries`, `summary_history_html`,
+    `export_summaries_md`), markdown→HTML (`_md_to_html`).
+  - `webapp/backup.py` — `backup_manifest`, `build_backup_zip`, `delete_report`.
+  - `webapp/handler.py` — the `Handler` class: every GET/POST route, delegating
+    to the modules above.
+  - `webapp/server.py` — `QuietServer`, `main` (CLI args, `--rebuild-reports`,
+    `--export-static`).
 - `go_terms.py` — **data only, no imports**: `CATEGORIES` + `TERMS`, a list of
   `(category, english, chinese, pinyin, say, meaning)` tuples (191 terms in 11
   categories), plus `count()` and `by_category()`. `meaning` may contain `<b>`/`<i>`;
   `terms_page` strips tags before building the search haystack, so searching "b"
   does not match every bolded entry. To add a term, append a tuple — the page
   picks it up on next load (and `_reload_app_modules` reloads `go_terms` too).
-- `report.py` — report HTML generator. `build_html(games, agg, recs, report_dir=None)`
-  assembles the inner-nav pages: **Overview** (`_home_page` + trends + move hist),
-  **Trajectory** (`trajectory_section`), **Blunders** (`practice_section`),
-  **Review summary** (`summary_section`), **Game by game** (`_games_page`).
-  `coach_review` and `_blunders_page`/`_recs_page` exist but are **not wired into
-  `build_html`** — dead code paths. Also: board SVGs, the big `CSS`,
-  `PRACTICE_JS`, `VOICE_JS`, `VOICE_PANEL`, `FLOAT_REC`, `PRACTICE_CLEAR_JS`,
-  `SUMMARY_SECT_JS`.
+- `report/` — report HTML generator (was a single `report.py`, split by concern;
+  `report/__init__.py` re-exports everything so `import report; report.build_html(...)`
+  etc. are unchanged). `report/core.py`'s `build_html(games, agg, recs,
+  report_dir=None)` assembles the inner-nav pages: **Overview** (`report/pages.py`'s
+  `_home_page` + `report/trends.py`'s `trends_section` + move hist),
+  **Trajectory** (`report/trajectory.py`'s `trajectory_section`), **Blunders**
+  (`report/practice.py`'s `practice_section`), **Review summary**
+  (`report/summary.py`'s `summary_section`), **Game by game**
+  (`report/pages.py`'s `_games_page`). `report/board.py` has the go-board
+  reconstruction, SVG diagrams and blunder-shape similarity. `report/legacy.py`
+  holds `coach_review` and `_blunders_page`/`_recs_page` — still re-exported but
+  **not wired into `build_html`** — dead code paths, kept for reference. The big
+  `CSS`, `PRACTICE_JS`, `VOICE_JS`, `VOICE_PANEL`, `FLOAT_REC`, `PRACTICE_CLEAR_JS`,
+  `SUMMARY_SECT_JS` string constants live in `report/assets.py`.
 - `import_lizzie.py` — `rebuild_report(out_dir, games_dirs=None)` → `report.build_html`.
   SGF import, filename dedup, `_norm_winrate`, main-line-only node scan.
 - `sgfparse.py` — `main_line_text()` / `parse_sgf()` (main line only).
@@ -208,8 +255,8 @@ that plus which config keys to refill.
 - `deepseek_api_key`, `deepseek_base_url` = `https://api.deepseek.com`, `deepseek_model`.
   **Model must be `deepseek-v4-pro` or `deepseek-v4-flash`** — `deepseek-chat` is rejected
   by this account (400). `flash` = faster/cheaper, `pro` = deeper.
-- **Analyze form defaults** (in `web_app.py`, not config): "Recent games to
-  download" = **1**, "Games to analyse" = **1**, visits = 300.
+- **Analyze form defaults** (in `webapp/assets.py`'s `ANALYSIS_MODULE`, not config):
+  "Recent games to download" = **1**, "Games to analyse" = **1**, visits = 300.
 
 ## Current state (as of this handoff)
 
@@ -240,8 +287,8 @@ that plus which config keys to refill.
   write — headers included, because `end_headers()` is usually where it raises — and
   `QuietServer.handle_error` swallows the disconnect so the traceback stays out of
   the log.
-- Forgot to **restart the server** after a `web_app.py` edit → old behavior persists.
-- Forgot to **rebuild** after a `report.py` edit → the served HTML is stale.
+- Forgot to **restart the server** after a `webapp/*.py` edit → old behavior persists.
+- Forgot to **rebuild** after a `report/*.py` edit → the served HTML is stale.
 - DeepSeek 400 "supported API model names…" → wrong `deepseek_model` (use v4-pro/flash).
   Note `_call_deepseek` still falls back to `"deepseek-chat"` if the key is missing
   from config — that value is rejected by this account.
