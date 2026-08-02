@@ -58,10 +58,14 @@ WHAT IS IN HERE
       summaries/*.md                every archived summary version
       practice_hidden.json          which blunders you deleted/mastered
       notes.json                    legacy per-position notes, if any
+  <repo>/tsumego/               the 101weiqi Skill Test diagnostics: source,
+    *.py, README.md, tests/     plus data/ (the crawl cache - kept because it
+    data/runs/, data/diagrams/  is thousands of throttled requests to rebuild)
 
 WHAT IS DELIBERATELY LEFT OUT
   config.json          holds your ikatago password and DeepSeek API key in
-                       plain text. Excluded so this zip is safe to store or
+                       plain text (and, under tsumego/, your 101weiqi session
+                       cookie). Excluded so this zip is safe to store or
                        share. See step 3 below.
   config.txt (Lizzie)  also stores the ikatago password.
   review_report.html   regenerated in seconds from the JSON above:
@@ -154,6 +158,23 @@ def backup_manifest():
             p = os.path.join(absdir, fn)
             out.append((p, "/".join([top, "go_review",
                                      os.path.relpath(p, root)])))
+
+    # The sibling tsumego package: its source, and its crawl cache. The cache is
+    # included on purpose -- it is thousands of throttled requests against a
+    # small site, so it is exactly the "expensive to regenerate" category the
+    # per-game analysis JSON is in. config.json (the 101weiqi session cookie) is
+    # skipped by BACKUP_SKIP_FILES like every other config.json; dashboard.html
+    # is regenerated on every view.
+    tz = os.path.join(repo, "tsumego")
+    for dirpath, dirnames, filenames in os.walk(tz):
+        dirnames[:] = [d for d in dirnames
+                       if d not in BACKUP_SKIP_DIRS and not d.startswith(".")]
+        for fn in sorted(filenames):
+            if (fn in BACKUP_SKIP_FILES or fn.startswith(".")
+                    or fn == "dashboard.html"):
+                continue
+            p = os.path.join(dirpath, fn)
+            out.append((p, "/".join([top, os.path.relpath(p, repo)])))
 
     # The few things outside go_review that the app genuinely needs to run.
     extras = [os.path.join(repo, "My games", "fox_full_downloader.py")]

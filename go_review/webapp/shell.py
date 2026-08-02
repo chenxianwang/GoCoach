@@ -69,6 +69,7 @@ def dashboard_page():
         "<button class='newbtn2' id='btn-compare'>&#8646; Compare reports &middot; track progress</button>"
         "<button class='newbtn2' id='btn-summary'>&#128211; Review summary &middot; diagnostic profile</button>"
         "<button class='newbtn2' id='btn-terms'>&#128214; Go terms &middot; Chinese to English</button>"
+        "<button class='newbtn2' id='btn-tsumego'>&#129504; Skill Test &middot; 101weiqi diagnostics</button>"
         "<a class='newbtn2 sidelink' id='btn-backup' href='/api/backup' download "
         "title='Zips the code plus your transcripts, summaries and deleted-blunder "
         "lists. Leaves out generated reports, per-game analysis and config.json "

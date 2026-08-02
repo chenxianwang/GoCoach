@@ -94,6 +94,18 @@ new session — read it first.
     archive (`archive_summary`, `list_summaries`, `summary_history_html`,
     `export_summaries_md`), markdown→HTML (`_md_to_html`).
   - `webapp/backup.py` — `backup_manifest`, `build_backup_zip`, `delete_report`.
+  - `webapp/tsumego_page.py` — the **101weiqi Skill Test** page (`/tsumego`,
+    sidebar). The analysis itself lives in the sibling **`tsumego/` package at
+    the repo root**, not in go_review; this module imports it (adding the repo
+    root to `sys.path`, the same reach-up `pipeline._load_downloader` does for
+    `My games/`), renders its dashboard, and exposes
+    `do_tsumego_refresh` (`POST /api/tsumego_refresh`, via the shared
+    `JOBS` slot, bounded to the 25 most recent runs). The dashboard ships its
+    **own complete stylesheet**, so it is served as a whole document into the
+    shell's iframe — do not wrap it in `_page()`, the CSS would collide. A
+    toolbar is injected after `<body>`. Falls back to a setup/empty state when
+    the package is missing, the cache is empty, or no cookie is configured (the
+    refresh button is hidden in that last case).
   - `webapp/handler.py` — the `Handler` class: every GET/POST route, delegating
     to the modules above.
   - `webapp/server.py` — `QuietServer`, `main` (CLI args, `--rebuild-reports`,
@@ -173,6 +185,11 @@ downloader module, and per report the `*.sgf.json` analysis **plus** `review_voi
 ikatago password in plaintext — the zip must stay safe for cloud storage),
 `review_report.html` / `index.html` (regenerated), the 114 MB of downloaded SGFs, and
 the engine binaries. ~19 MB raw → ~3.4 MB zip.
+Also included: the sibling **`tsumego/`** package — source *and* `data/` (its crawl
+cache), because that cache is thousands of throttled requests to rebuild, putting it
+in the same "expensive to regenerate" class as the per-game analysis JSON.
+`tsumego/config.json` (the 101weiqi session cookie) is excluded by the same
+`config.json` rule as everything else; `tsumego/dashboard.html` is regenerated.
 
 Restore is: unzip → `python3 go_review/web_app.py --rebuild-reports` → launch. That
 flag rebuilds every report from the JSON and rewrites `index.html`, needing no engine,

@@ -460,6 +460,8 @@ SHELL_JS = r"""
     if(bs) bs.classList.toggle('on', key==='__summary__');
     var bt=document.getElementById('btn-terms');
     if(bt) bt.classList.toggle('on', key==='__terms__');
+    var bz=document.getElementById('btn-tsumego');
+    if(bz) bz.classList.toggle('on', key==='__tsumego__');
     document.querySelectorAll('.repitem').forEach(function(el){
       el.classList.toggle('on', el.dataset.rel===key); });
   }
@@ -467,6 +469,8 @@ SHELL_JS = r"""
   function openCompare(){ frame.src='/compare?embed=1'; setActive('__compare__'); }
   function openSummary(){ frame.src='/summary?embed=1'; setActive('__summary__'); }
   function openTerms(){ frame.src='/terms?embed=1'; setActive('__terms__'); }
+  function openTsumego(){ frame.src='/tsumego?embed=1&t='+Date.now();
+    setActive('__tsumego__'); }
   function openReport(rel){ frame.src='/r/'+enc(rel)+'?embed=1&t='+Date.now();
     setActive(rel);
     if(window.matchMedia && window.matchMedia('(max-width:760px)').matches)
@@ -528,6 +532,7 @@ SHELL_JS = r"""
   var _bc=document.getElementById('btn-compare'); if(_bc) _bc.onclick=openCompare;
   var _bs=document.getElementById('btn-summary'); if(_bs) _bs.onclick=openSummary;
   var _bt=document.getElementById('btn-terms'); if(_bt) _bt.onclick=openTerms;
+  var _bz=document.getElementById('btn-tsumego'); if(_bz) _bz.onclick=openTsumego;
   loadReports().then(function(reps){
     if(reps.length) openReport(reps[0].rel); else openAnalyze();
   });
