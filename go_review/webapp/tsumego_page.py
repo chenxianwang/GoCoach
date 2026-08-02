@@ -73,10 +73,13 @@ BAR_JS = """
       .catch(function(e){ stat.textContent='Lost contact: '+e; btn.disabled=false; });
   }
   btn.onclick=function(){
-    btn.disabled=true; stat.textContent='Fetching...';
+    var sel=document.getElementById('tzScope');
+    var limit=sel?parseInt(sel.value,10):25;
+    btn.disabled=true;
+    stat.textContent='Fetching '+limit+' runs -- this takes a while, you can leave the page';
     log.textContent=''; log.classList.add('on');
     fetch('/api/tsumego_refresh',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({})})
+      body:JSON.stringify({limit:limit})})
       .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
       .then(function(res){
         if(!res.ok||!res.d.job){ stat.textContent=res.d.error||'Could not start.';
@@ -90,12 +93,30 @@ BAR_JS = """
 """
 
 
+#: (runs, label) -- the estimate assumes ~11 requests per run at ~3.2s each,
+#: which is the site's own rate limit (see tsumego/api.py MIN_DELAY).
+REFRESH_SCOPES = [(10, "10 newest runs (~6 min)"),
+                  (25, "25 newest runs (~15 min)"),
+                  (50, "50 newest runs (~30 min)"),
+                  (100, "100 newest runs (~1 hour)")]
+
+
 def _bar_html(status, embed, can_refresh=True):
     back = ("" if embed else
             "<a href='/'>&larr; Back to dashboard</a>")
-    refresh = ("<button id='tzRefresh' title='Fetch the most recent runs you have "
-               "not cached yet'>&#10227; Refresh from 101weiqi</button>"
-               if can_refresh else "")
+    if can_refresh:
+        opts = "".join(
+            f"<option value='{n}'{' selected' if n == DEFAULT_REFRESH_LIMIT else ''}>"
+            f"{lbl}</option>" for n, lbl in REFRESH_SCOPES)
+        refresh = (
+            f"<select id='tzScope' title='Already-cached runs are skipped, so "
+            f"re-running continues where you left off'>{opts}</select>"
+            "<button id='tzRefresh' title='Fetch runs you have not cached yet. "
+            "The site allows about one request every 3 seconds, so this takes a "
+            "while -- it runs in the background and is resumable.'>"
+            "&#10227; Fetch from 101weiqi</button>")
+    else:
+        refresh = ""
     return (f"<div class='tzbar'><span class='t'>101weiqi Skill Test</span>"
             f"<span class='s'>{status}</span><span class='sp'></span>"
             f"{refresh}<span class='s' id='tzStat'></span>{back}</div>"
@@ -218,12 +239,15 @@ def do_tsumego_refresh(job, body):
     from tsumego.api import Client, NotLoggedIn
 
     limit = int((body or {}).get("limit") or DEFAULT_REFRESH_LIMIT)
-    print(f"Refreshing the {limit} most recent Skill Test runs...")
+    limit = max(1, min(limit, max(n for n, _ in REFRESH_SCOPES)))
     try:
-        client = Client()
+        client = Client(log=print)
     except NotLoggedIn as e:
         raise RuntimeError(
             f"{e}\nSee tsumego/README.md -- copy a session cookie into "
             f"tsumego/config.json, then try again.")
+    print(f"Fetching up to {limit} recent runs (already-cached ones are "
+          f"skipped). The site allows about one request every "
+          f"{client.delay:.1f}s, so this is slow by necessity.\n")
     mods["crawl"].crawl(client, limit=limit, log=print)
-    print("Cache updated.")
+    print("\nCache updated -- the page will reload.")

@@ -13,6 +13,7 @@ import os
 import json
 
 from . import api
+from .api import NotLoggedIn
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
@@ -22,6 +23,13 @@ DIAGRAMS = os.path.join(DATA, "diagrams")
 # A run is a fixed-length set of questions; walking stops when a question comes
 # back unanswered or missing. The cap is a guard against an unexpected format.
 MAX_QUESTIONS = 30
+
+
+def log_print(*a):
+    """Default logger. Flushes, because a crawl is slow by design (the site
+    allows ~1 request per 3.5s) and Python block-buffers stdout when it is
+    redirected to a file -- without this, a long run looks frozen."""
+    print(*a, flush=True)
 
 
 def _ensure_dirs():
@@ -70,8 +78,16 @@ def slim_question(q, n):
     }
 
 
-def fetch_run(client, rec, refresh_diagrams=False, log=print):
-    """Fetch one run's questions (and their crowd trees). Cached on disk."""
+def fetch_run(client, rec, refresh_diagrams=False, log=log_print):
+    """Fetch one run's questions (and their crowd trees). Cached on disk.
+
+    Returns None if the run came back with no questions. That is *not* cached:
+    the session cookie expires (it is a normal Django session, not a permanent
+    token), and an expired one makes every question page come back without
+    `qqdata` -- indistinguishable here from an empty run. Caching those would
+    bake permanent holes into the history, so an empty result is left uncached
+    and reported upwards instead.
+    """
     _ensure_dirs()
     guanid, number = rec["guanid"], rec["number"]
     path = _run_path(guanid)
@@ -89,6 +105,14 @@ def fetch_run(client, rec, refresh_diagrams=False, log=print):
         if an.get("st") != 2 or not an.get("pts"):
             break
         questions.append(slim_question(q, n))
+        # One question is several seconds of enforced waiting, so say so as we
+        # go -- otherwise a run looks frozen for well over a minute.
+        log(f"    run {guanid} q{n}: "
+            f"{'correct' if an.get('result') == 1 else 'wrong'} "
+            f"({q.get('qtypename') or '?'}, {an.get('costtime')}s)")
+
+    if not questions:
+        return None
 
     out = {
         "guanid": guanid,
@@ -122,7 +146,7 @@ def fetch_diagram(client, qid, refresh=False):
             json.dump(dia, f, ensure_ascii=False)
 
 
-def crawl(client=None, limit=None, levels=None, since=None, log=print):
+def crawl(client=None, limit=None, levels=None, since=None, log=log_print):
     """Fetch runs newest-first.
 
     limit  -- stop after this many runs (default: all)
@@ -152,11 +176,28 @@ def crawl(client=None, limit=None, levels=None, since=None, log=print):
         recs = recs[:limit]
 
     todo = [r for r in recs if not os.path.exists(_run_path(r["guanid"]))]
-    log(f"Fetching {len(todo)} new runs ({len(recs) - len(todo)} already cached)")
+    mins = len(todo) * 11 * client.delay / 60.0
+    log(f"Fetching {len(todo)} new runs ({len(recs) - len(todo)} already cached)"
+        + (f" -- roughly {mins:.0f} min at {client.delay:.1f}s/request"
+           if todo else ""))
+
+    empty_streak = 0
     for i, rec in enumerate(recs, 1):
-        if i % 25 == 0:
+        got = fetch_run(client, rec, log=log)
+        if got is None:
+            # Not cached, so it will be retried next time. A few in a row means
+            # something systemic -- almost always an expired session cookie.
+            empty_streak += 1
+            if empty_streak >= 3:
+                raise NotLoggedIn(
+                    "Three runs in a row came back with no questions. The "
+                    "session cookie has almost certainly expired -- copy a "
+                    "fresh one into tsumego/config.json and run this again. "
+                    "Nothing already cached was lost.")
+        else:
+            empty_streak = 0
+        if i % 10 == 0:
             log(f"  ...{i}/{len(recs)}")
-        fetch_run(client, rec, log=lambda *a: None)
     log("Done.")
     return load_runs()
 

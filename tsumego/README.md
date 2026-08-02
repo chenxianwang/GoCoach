@@ -47,14 +47,14 @@ session has lapsed.
 ## Use
 
 ```bash
-python3 -m tsumego fetch --limit 40      # start small: 40 most recent runs
+python3 -m tsumego fetch --limit 10      # start small (~11 min -- see rate limits below)
 python3 -m tsumego report --open
 ```
 
-Then widen it once you are happy:
+Then widen it once you are happy — in chunks, not all at once:
 
 ```bash
-python3 -m tsumego fetch                 # everything (see "Be polite" below)
+python3 -m tsumego fetch --limit 100      # ~2 hours; resumable, re-run to continue
 python3 -m tsumego fetch --level 3级 --level 4级
 python3 -m tsumego report --need 8 --total 10
 ```
@@ -67,12 +67,66 @@ cheap. Interrupt it any time.
 `--need` / `--total` control the pass-rate projection ("what accuracy buys
 you"). Set them to match the level you are chasing.
 
-## Be polite
+## Rate limiting — read this before a big crawl
 
-A full history is a few thousand page loads against a small site. The client
-sleeps `delay` seconds between requests (0.7s default) and caches aggressively
-so you only ever pay once. Please leave the throttle on, and prefer `--limit` /
-`--level` over re-crawling everything. This reads only your own account's data.
+**The site allows roughly one request every 3 seconds.** When you go faster it
+does not return 429 — it returns **HTTP 200 with a 35-byte body**:
+
+```
+please wait 3 seconds,and try again
+```
+
+That is invisible to the status code, so a naive client records empty results
+instead of failing. Push harder still and the throttle escalates to **HTTP 500
+for a while** — that is not a bug on their side, and it clears on its own after
+a minute or two rather than after a few seconds.
+
+Worse, the limit is **not a fixed rate**. Three seconds works from cold, but
+under sustained traffic it tightens, and once it has escalated to 500 it stays
+unhappy for a while.
+
+So the client **self-tunes** rather than trusting any hard-coded number. It
+starts at a 6s floor, and every time it is refused it widens its own spacing by
+1.5× (up to 30s) and keeps the wider spacing for the rest of the session — it
+never speeds back up, because probing is what triggers the throttle in the first
+place. On a 500 it also waits 20s → 45s → 90s → 180s instead of retrying in
+seconds. In practice a long crawl settles at whatever the site currently
+tolerates:
+
+```
+Fetching 2 new runs -- roughly 1 min at 4.0s/request
+    HTTP 500; waiting 20s (spacing now 6.0s)
+    HTTP 500; waiting 45s (spacing now 9.0s)
+```
+
+**If the site has already been pushed hard, it stays unhappy for a while** —
+tens of minutes, not seconds. When every request is coming back 500 no matter
+how patient the client is, stop, leave it alone for half an hour, and start
+again with a small `--limit`. Retrying through it only extends the penalty.
+
+A run whose questions all came back empty is **never cached**, so a session
+that expires (or a throttle storm) mid-crawl cannot bake permanent holes into
+your history — those runs are simply refetched next time.
+
+**If a crawl does die with `RateLimited`, nothing is lost.** Wait a few minutes
+and run the same command again; it skips everything already cached and picks up
+where it stopped.
+
+What that means in practice, at ~10 questions per run plus one crowd-tree fetch
+per question id you have not seen before:
+
+| Scope | Roughly |
+|---|---|
+| `--limit 10` | ~11 min |
+| `--limit 40` | ~45 min |
+| `--limit 100` | ~2 hours |
+| all 483 runs | **~9 hours** (do it over several days) |
+
+So do it in chunks. `fetch` is resumable and skips everything already cached, so
+running `--limit 100` five times over a few days costs the same as one long
+crawl — and you can build the dashboard at any point from whatever you have.
+Prefer `--level` if you only care about one level. This reads only your own
+account's data.
 
 ## Layout
 

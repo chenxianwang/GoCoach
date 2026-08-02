@@ -37,7 +37,7 @@ def _levels_arg(values):
 
 def cmd_fetch(args):
     try:
-        client = Client(delay=args.delay)
+        client = Client(delay=args.delay, log=crawl.log_print)
     except NotLoggedIn as e:
         raise SystemExit(f"{e}\n\nSee tsumego/README.md for how to get the cookie.")
     crawl.crawl(client, limit=args.limit, levels=_levels_arg(args.level))
@@ -73,8 +73,9 @@ def main(argv=None):
     f.add_argument("--limit", type=int, help="only the N most recent runs")
     f.add_argument("--level", action="append",
                    help="restrict to a level, e.g. --level 3级 (repeatable)")
-    f.add_argument("--delay", type=float, default=0.7,
-                   help="seconds between requests (default 0.7)")
+    f.add_argument("--delay", type=float, default=None,
+                   help="seconds between requests (default 3.2, which is the "
+                        "site's own rate limit; lower values are ignored)")
     f.set_defaults(func=cmd_fetch)
 
     r = sub.add_parser("report", help="build the dashboard from the cache")

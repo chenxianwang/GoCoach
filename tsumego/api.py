@@ -33,6 +33,34 @@ class NotLoggedIn(RuntimeError):
     """The cookie is missing or has expired."""
 
 
+class RateLimited(RuntimeError):
+    """The server asked us to slow down and we ran out of retries."""
+
+
+# The record pages are rate limited to roughly one request every 3 seconds.
+# When you go faster the server replies **HTTP 200** with a 35-byte body --
+# "please wait 3 seconds,and try again" -- so this cannot be detected from the
+# status code, and a client that ignores it silently records empty results.
+# Hammering it further turns into a 500.
+RATE_LIMIT_HINT = "please wait"
+RETRIES = 5
+
+# The throttle is not a fixed rate. The stub says "3 seconds", and three seconds
+# does work from cold -- but under sustained traffic the limit tightens, and
+# once it escalates to 500 it stays unhappy for a while. Rather than hard-code a
+# guess, the client starts near the advertised floor and *widens its own spacing
+# every time it is refused*, keeping the wider spacing for the rest of the
+# session. A long crawl therefore settles at whatever the site currently
+# tolerates instead of fighting it.
+MIN_DELAY = 6.0          # what actually held up in testing; 3-4s trips it
+MAX_DELAY = 30.0
+DELAY_GROWTH = 1.5       # multiplier applied each time we are refused
+
+# A 5xx here is the throttle escalating, not a bug on their side. It clears on
+# its own, but over a minute or two -- backing off in seconds is useless.
+COOLDOWN = [20, 45, 90, 180]
+
+
 def load_config(path=None):
     """Config lives in tsumego/config.json (gitignored). The cookie may also be
     supplied via the WEIQI101_COOKIE env var so it never touches disk."""
@@ -56,7 +84,7 @@ class Client:
     """One logged-in session. `delay` seconds are slept between requests so a
     full crawl stays polite -- this is someone's small site, not an API."""
 
-    def __init__(self, cookie=None, delay=0.7, timeout=30):
+    def __init__(self, cookie=None, delay=None, timeout=30, log=None):
         cfg = load_config()
         self.cookie = (cookie or cfg.get("cookie") or "").strip()
         if not self.cookie:
@@ -64,8 +92,12 @@ class Client:
                 "No session cookie. Put one in tsumego/config.json "
                 "(see config.example.json) or set WEIQI101_COOKIE.")
         self.csrf = _csrf_from_cookie(self.cookie)
-        self.delay = cfg.get("delay", delay)
+        want = delay if delay is not None else cfg.get("delay")
+        # Never go below the server's own floor, whatever the config says --
+        # going faster does not get more data, it gets rate-limit stubs.
+        self.delay = max(MIN_DELAY, float(want or 0))
         self.timeout = timeout
+        self.log = log or (lambda *a: None)
         self._last = 0.0
 
     # -- plumbing ----------------------------------------------------------
@@ -75,18 +107,62 @@ class Client:
             time.sleep(wait)
         self._last = time.time()
 
+    def _widen(self):
+        """Permanently slow down after being refused. Never speeds back up --
+        the site punishes probing, so re-tightening would just re-trigger it."""
+        before = self.delay
+        self.delay = min(MAX_DELAY, self.delay * DELAY_GROWTH)
+        return self.delay != before
+
+    def _once(self, req):
+        with urllib.request.urlopen(req, timeout=self.timeout) as r:
+            raw = r.read()
+            if r.headers.get("Content-Encoding") == "gzip":
+                raw = gzip.decompress(raw)
+            return raw.decode("utf-8", "replace")
+
     def _open(self, req):
-        self._throttle()
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as r:
-                raw = r.read()
-                if r.headers.get("Content-Encoding") == "gzip":
-                    raw = gzip.decompress(raw)
-                return raw.decode("utf-8", "replace")
-        except urllib.error.HTTPError as e:
-            if e.code in (401, 403):
-                raise NotLoggedIn(f"Server said {e.code} -- cookie expired?")
-            raise
+        """One request, with backoff for the throttle, 5xx and timeouts.
+
+        The rate limit is invisible to the status code (see RATE_LIMIT_HINT),
+        so short bodies are inspected before being handed back.
+        """
+        last = None
+        cools = 0            # how many long cool-downs we have already taken
+        for attempt in range(RETRIES):
+            self._throttle()
+            wait = self.delay
+            refused = True
+            try:
+                body = self._once(req)
+                if len(body) < 200 and RATE_LIMIT_HINT in body.lower():
+                    last = f"throttled ({body.strip()!r})"
+                else:
+                    return body
+            except urllib.error.HTTPError as e:
+                if e.code in (401, 403):
+                    raise NotLoggedIn(f"Server said {e.code} -- cookie expired?")
+                if e.code < 500:
+                    raise
+                last = f"HTTP {e.code}"
+                wait = COOLDOWN[min(cools, len(COOLDOWN) - 1)]
+                cools += 1
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                last = f"{type(e).__name__}: {e}"
+                refused = False          # a network blip, not the site refusing
+            if refused:
+                self._widen()
+            if attempt < RETRIES - 1:
+                self.log(f"    {last}; waiting {wait:.0f}s "
+                         f"(spacing now {self.delay:.1f}s)")
+                time.sleep(wait)
+                self._last = time.time()
+        raise RateLimited(
+            f"Gave up after {RETRIES} tries ({last}). The site throttles hard "
+            f"after a burst and answers 500 for a while. Nothing cached was "
+            f"lost -- wait a few minutes and run the same command again; it "
+            f"resumes where it stopped. Raising \"delay\" in "
+            f"tsumego/config.json makes this less likely.")
 
     def get(self, path):
         req = urllib.request.Request(

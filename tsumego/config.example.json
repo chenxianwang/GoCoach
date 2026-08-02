@@ -1,5 +1,6 @@
 {
   "_comment": "Copy to config.json (gitignored) and paste your own session cookie. See README.md. You can also set WEIQI101_COOKIE instead and keep it off disk entirely.",
+  "_delay": "Seconds between requests. The site throttles hard and adaptively: it answers HTTP 200 with 'please wait 3 seconds,and try again' when you go too fast, then escalates to 500. 6.0 is the floor the client enforces, and it widens further on its own each time it is refused. Raise this if you still see 500s.",
   "cookie": "sessionid=...; csrftoken=...",
-  "delay": 0.7
+  "delay": 6.0
 }
