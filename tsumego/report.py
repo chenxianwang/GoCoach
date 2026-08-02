@@ -166,6 +166,8 @@ def _headline(agg):
     out.append("<p class='sub'>Every wrong answer, matched against the crowd move "
                "tree. These three want different training, which is the whole "
                "point of separating them.</p>")
+    pending = k.get("unclassified", 0)
+    known = max(1, total_fail - pending)
     out.append("<div class='kindbox'>")
     for kind in ("trap", "depth", "off_book"):
         n = k.get(kind, 0)
@@ -173,9 +175,17 @@ def _headline(agg):
             f"<div class='k'><span class='tag' style='background:{KIND_COLOR[kind]}'>"
             f"{esc(KIND_LABEL[kind])}</span>"
             f"<div class='n'>{n:,} <span style='font-size:14px;color:#667085'>"
-            f"({n / total_fail * 100:.0f}% of misses)</span></div>"
+            f"({n / known * 100:.0f}% of classified misses)</span></div>"
             f"<p>{esc(KIND_BLURB[kind])}</p></div>")
     out.append("</div>")
+    if pending:
+        out.append(
+            f"<div class='note'><b>{pending:,} of your {total_fail:,} misses are "
+            f"not classified yet.</b> The crowd move tree for those questions "
+            f"has not been fetched — the site throttles that endpoint much "
+            f"harder than the rest, so it lands last. They are excluded from "
+            f"the three counts above rather than guessed at; run the fetch "
+            f"again to fill them in.</div>")
     return "".join(out)
 
 

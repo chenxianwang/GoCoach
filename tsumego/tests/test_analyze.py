@@ -193,6 +193,48 @@ def test_traps_are_grouped_by_problem_not_listed_once_per_miss():
     assert agg["traps"][0]["best_move"] == "Q18"
 
 
+def test_missing_crowd_tree_is_admitted_not_guessed():
+    """A miss with no diagram fetched must not be reported as off_book -- that
+    would invent a diagnosis from absent data."""
+    a = analyze.classify(Q1, {})
+    assert a["kind"] == "unclassified"
+    assert a["diverge_at"] is None
+    # a solved question needs no tree to be known correct
+    assert analyze.classify(Q4, {})["kind"] == "correct"
+
+
+def test_run_walk_stops_at_totaltime():
+    """totaltime equals the sum of costtime, so the walk must stop on the last
+    real question instead of probing a non-existent one -- that extra request
+    is the one most likely to be throttled."""
+    from tsumego import crawl
+    calls = []
+
+    class FakeClient:
+        delay = 6.0
+        def question(self, number, guanid, n):
+            calls.append(n)
+            if n > 3:
+                raise AssertionError("walked past the end of the run")
+            return {"qid": 100 + n, "qtypename": "Tesuji", "lu": 19,
+                    "myan": {"st": 2, "result": 1, "costtime": 10,
+                             "pts": [{"p": "mf"}]},
+                    "taskresult": {}}
+
+    import tempfile, os
+    old = crawl.RUNS
+    with tempfile.TemporaryDirectory() as d:
+        crawl.RUNS = d
+        try:
+            out = crawl.fetch_run(FakeClient(),
+                                  {"guanid": 1, "number": 13, "totaltime": 30},
+                                  log=lambda *a: None)
+        finally:
+            crawl.RUNS = old
+    assert calls == [1, 2, 3]
+    assert len(out["questions"]) == 3
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

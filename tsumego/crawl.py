@@ -95,6 +95,14 @@ def fetch_run(client, rec, refresh_diagrams=False, log=log_print):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
 
+    # The run index reports totaltime, and it is exactly the sum of the
+    # questions' costtime. Using it as the stop condition means we never request
+    # the non-existent question after the last one -- which mattered: that extra
+    # request is the one most likely to be throttled, and losing it used to
+    # discard the entire run we had just spent a minute fetching.
+    budget = rec.get("totaltime") or 0
+    spent = 0
+
     questions = []
     for n in range(1, MAX_QUESTIONS + 1):
         q = client.question(number, guanid, n)
@@ -105,11 +113,14 @@ def fetch_run(client, rec, refresh_diagrams=False, log=log_print):
         if an.get("st") != 2 or not an.get("pts"):
             break
         questions.append(slim_question(q, n))
+        spent += an.get("costtime") or 0
         # One question is several seconds of enforced waiting, so say so as we
         # go -- otherwise a run looks frozen for well over a minute.
         log(f"    run {guanid} q{n}: "
             f"{'correct' if an.get('result') == 1 else 'wrong'} "
             f"({q.get('qtypename') or '?'}, {an.get('costtime')}s)")
+        if budget and spent >= budget:
+            break
 
     if not questions:
         return None
@@ -126,8 +137,6 @@ def fetch_run(client, rec, refresh_diagrams=False, log=log_print):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False)
 
-    for q in questions:
-        fetch_diagram(client, q["qid"], refresh=refresh_diagrams)
     log(f"  run {guanid}: {len(questions)} questions "
         f"({sum(1 for q in questions if q['result'] == 1)} correct)")
     return out
@@ -198,8 +207,52 @@ def crawl(client=None, limit=None, levels=None, since=None, log=log_print):
             empty_streak = 0
         if i % 10 == 0:
             log(f"  ...{i}/{len(recs)}")
+
+    fetch_missing_diagrams(client, log=log)
     log("Done.")
     return load_runs()
+
+
+def missing_diagram_qids():
+    """Question ids we have an attempt for but no crowd move tree yet."""
+    have = {fn[:-5] for fn in os.listdir(DIAGRAMS)} if os.path.isdir(DIAGRAMS) else set()
+    want = []
+    for run in load_runs():
+        for q in run.get("questions", []):
+            qid = q.get("qid")
+            if qid and str(qid) not in have and qid not in want:
+                want.append(qid)
+    return want
+
+
+def fetch_missing_diagrams(client, limit=None, log=log_print):
+    """Second pass: the crowd move trees.
+
+    Kept separate from the run walk because `POST /tools/getdiagram/` is
+    throttled far harder than the record pages -- ten question pages sail
+    through and then the very first diagram POST starts returning 500. Running
+    it as its own pass means a throttle storm here costs only the trees, never
+    the runs, which are already safely on disk. Whatever is missed is simply
+    picked up next time.
+    """
+    todo = missing_diagram_qids()
+    if limit:
+        todo = todo[:limit]
+    if not todo:
+        return 0
+    log(f"Fetching {len(todo)} crowd move trees "
+        f"(these are throttled harder than the record pages)")
+    done = 0
+    for qid in todo:
+        try:
+            fetch_diagram(client, qid)
+            done += 1
+        except api.RateLimited as e:
+            log(f"  stopped after {done}/{len(todo)} trees: {e}")
+            log("  The runs are safe; re-run the same command later to finish "
+                "the trees. Until then those attempts show as unclassified.")
+            break
+    return done
 
 
 def load_runs():

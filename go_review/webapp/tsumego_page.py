@@ -191,8 +191,12 @@ def _status_line(agg, runs):
     last = max((r.get("t") or 0) for r in runs) if runs else 0
     when = (datetime.datetime.fromtimestamp(last).strftime("%Y-%m-%d")
             if last else "unknown")
-    return (f"{agg['n']:,} questions &middot; {agg['n_runs']:,} runs "
-            f"&middot; newest {when}")
+    bits = [f"{agg['n']:,} questions", f"{agg['n_runs']:,} runs",
+            f"newest {when}"]
+    pending = agg["kinds"].get("unclassified", 0)
+    if pending:
+        bits.append(f"{pending} awaiting crowd data &mdash; fetch again to finish")
+    return " &middot; ".join(bits)
 
 
 def tsumego_page(embed=False, need=8, total=10):

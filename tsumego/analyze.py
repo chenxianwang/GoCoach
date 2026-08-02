@@ -128,6 +128,15 @@ def classify(question, diagram):
         out["diverge_at"] = None
         return out
 
+    if not diagram:
+        # No crowd tree fetched yet (they are throttled harder than the record
+        # pages, so a crawl often lands the runs first). Without it we cannot
+        # tell a trap from a guess -- say so rather than defaulting to one of
+        # them, which would silently invent a diagnosis.
+        out["kind"] = "unclassified"
+        out["diverge_at"] = None
+        return out
+
     _, diverge_at = walk_my_line(diagram, moves)
     out["diverge_at"] = diverge_at
     if diverge_at is not None and diverge_at > 0:
