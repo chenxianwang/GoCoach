@@ -9,6 +9,9 @@ tsumego/config.json
 tsumego/data/
 tsumego/dashboard.html
 
+# ── Working Desktop app output ──────────────────────────────────
+workdesk/logs/
+
 # ── personal game data (each user brings their own) ─────────────
 My games/*
 !My games/fox_full_downloader.py

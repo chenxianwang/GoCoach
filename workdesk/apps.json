@@ -1,0 +1,36 @@
+{
+  "_comment": "Your Working Desktop. Add an entry per app; the page shows one card each. `command` is run through the shell, so quoting/&& work as they do in Terminal. `cwd` accepts ~. `probe` is how the page tells whether the app is already running -- port for web apps, process for GUI ones. Only ids listed here can ever be launched; the browser never sends a command.",
+  "port": 8600,
+  "apps": [
+    {
+      "id": "yimu",
+      "name": "一目弈镜 · Go Review",
+      "emoji": "⚫",
+      "note": "KataGo review dashboard for your Fox / LizzieYZY games.",
+      "command": "'/Users/chenxianwang/Desktop/ClaudeCode-Go/一目弈镜.command'",
+      "cwd": "~/Desktop/ClaudeCode-Go",
+      "probe": {"type": "port", "port": 8765},
+      "url": "http://127.0.0.1:8765/"
+    },
+    {
+      "id": "english-coach",
+      "name": "English Coach",
+      "emoji": "🎧",
+      "note": "Speaking practice, recording and transcription.",
+      "command": "python english_coach_web.py",
+      "cwd": "~/Desktop/English Coach",
+      "probe": {"type": "port", "port": 8000},
+      "url": "http://127.0.0.1:8000/"
+    },
+    {
+      "id": "lizzie",
+      "name": "LizzieYZY",
+      "emoji": "🀄",
+      "note": "KataGo GUI for analysing a game move by move.",
+      "command": "java -jar '/Users/chenxianwang/Desktop/KataGo/2023-06-15-Macosx(amd64)+Linux(amd64)/Macosx(amd64)/lizzie-yzy2.5.3-shaded.jar'",
+      "cwd": "~",
+      "_cwd_note": "Lizzie reads config.txt / persist from its working directory. ~ matches running the command from a fresh Terminal, which is where your current engine settings live -- changing this points Lizzie at a different config.",
+      "probe": {"type": "process", "match": "lizzie-yzy"}
+    }
+  ]
+}
