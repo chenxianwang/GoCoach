@@ -1,8 +1,13 @@
 # ── secrets / local machine config ──────────────────────────────
 go_review/config.json
 go_review/config.local.json
+tsumego/config.json
 /config.txt
 /persist
+
+# ── scraped 101weiqi cache + generated dashboard ────────────────
+tsumego/data/
+tsumego/dashboard.html
 
 # ── personal game data (each user brings their own) ─────────────
 My games/*

@@ -1,0 +1,5 @@
+{
+  "_comment": "Copy to config.json (gitignored) and paste your own session cookie. See README.md. You can also set WEIQI101_COOKIE instead and keep it off disk entirely.",
+  "cookie": "sessionid=...; csrftoken=...",
+  "delay": 0.7
+}
