@@ -1,7 +1,7 @@
 # Working Desktop
 
 A page for launching your local apps without opening a terminal. Double-click
-**`Working Desktop.command`** in the repo root, or:
+**`~/Desktop/Working Desktop.command`**, or from anywhere:
 
 ```bash
 python3 -m workdesk
@@ -9,6 +9,24 @@ python3 -m workdesk
 
 It opens <http://127.0.0.1:8600/> with one card per app: Launch, Open, Stop, and
 the app's log.
+
+## The launcher lives on the Desktop
+
+`Working Desktop.command` sits on the Desktop for one-click access while the
+code stays here under version control, so it holds an **absolute path** to this
+repo rather than `cd "$(dirname "$0")"`:
+
+```bash
+REPO="/Users/chenxianwang/Desktop/ClaudeCode-Go"
+```
+
+If you move or rename the repo, open that file and update `REPO` — it checks
+the path first and says exactly that rather than failing obscurely. To recreate
+it from scratch, a two-line version is enough:
+
+```bash
+cd /Users/chenxianwang/Desktop/ClaudeCode-Go && python3 -m workdesk
+```
 
 ## Adding an app
 
