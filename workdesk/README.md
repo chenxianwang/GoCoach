@@ -100,3 +100,19 @@ This page starts processes, so it is built to be uninteresting to attack:
 
 Anything in `apps.json` runs with your privileges — treat it like your shell
 history, and keep it to commands you would type yourself.
+
+## Icons
+
+`emoji` covers most apps. When no emoji fits, use a named inline icon instead:
+
+```json
+{ "id": "lizzie", "name": "LizzieYZY", "icon": "goban" }
+```
+
+| Name | Looks like |
+|---|---|
+| `goban` | A wooden Go board with black and white stones |
+
+Unicode has no Go symbol — 🀄 is a mahjong tile and ♟ is chess — which is why
+this exists. Add more in `ICONS` in [`page.py`](page.py); an unknown name
+renders a visible “?” rather than silently disappearing.

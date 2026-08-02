@@ -101,8 +101,37 @@ setInterval(refresh, 4000);
 """
 
 
+#: Named inline icons, for apps no emoji describes well. Unicode has no Go
+#: symbol -- 🀄 is a mahjong tile and ♟ is chess -- so a board gets drawn.
+#: Use with `"icon": "goban"` in apps.json; `emoji` still works for the rest.
+ICONS = {
+    "goban": (
+        "<svg viewBox='0 0 32 32' width='27' height='27' aria-hidden='true'>"
+        "<rect x='2' y='2' width='28' height='28' rx='4' fill='#dcb277'/>"
+        "<g stroke='#7d5c30' stroke-width='1.3' stroke-linecap='round'>"
+        "<path d='M9 8.5v15M16 8.5v15M23 8.5v15'/>"
+        "<path d='M8.5 9h15M8.5 16h15M8.5 23h15'/></g>"
+        "<circle cx='16' cy='16' r='3.3' fill='#15181d'/>"
+        "<circle cx='23' cy='9' r='3.3' fill='#fbfcfd'/>"
+        "<circle cx='9' cy='23' r='3.3' fill='#15181d'/>"
+        "</svg>"),
+}
+
+
 def esc(x):
     return html.escape(str(x if x is not None else ""))
+
+
+def icon_html(app):
+    """An app's icon: a named inline SVG if it asks for one, else its emoji."""
+    name = app.get("icon")
+    if name:
+        svg = ICONS.get(name)
+        if svg:
+            return svg
+        # A typo in apps.json should be visible, not silently blank.
+        return f"<span title='unknown icon {esc(name)}'>&#10067;</span>"
+    return esc(app.get("emoji") or "•")
 
 
 def _card(app):
@@ -114,7 +143,7 @@ def _card(app):
     return (
         f"<div class='card' id='card-{aid}'>"
         f"<div class='top'><div class='dot' id='dot-{aid}'></div>"
-        f"<div class='emoji'>{esc(app.get('emoji') or '•')}</div>"
+        f"<div class='emoji'>{icon_html(app)}</div>"
         f"<div><div class='nm'>{esc(app.get('name') or app['id'])}</div>"
         f"<div class='note'>{esc(app.get('note') or '')}</div></div></div>"
         f"<div class='state' id='state-{aid}'>Checking&hellip;</div>"
