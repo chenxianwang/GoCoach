@@ -21,7 +21,30 @@ import datetime
 from .paths import HERE
 
 REPO_ROOT = os.path.dirname(HERE)
-DEFAULT_REFRESH_LIMIT = 25   # a top-up, not a full re-crawl
+DEFAULT_REFRESH_LIMIT = 10   # small batches beat one long crawl -- see REFRESH_SCOPES
+
+
+#: dependency order -- api before crawl/analyze, which report and the CLI use
+TSUMEGO_SUBMODULES = ["api", "analyze", "crawl", "report"]
+
+
+def reload_tsumego():
+    """Pick up edits to tsumego/*.py without restarting the server.
+
+    The shell is long-running, so once `tsumego.api` is imported it stays in
+    memory. Editing it on disk then leaves the server executing stale bytecode
+    while tracebacks quote the *new* file's line numbers -- which is as
+    confusing as it sounds (you get a traceback pointing at a docstring). The
+    refresh job reloads the package first so what runs is what is on disk.
+    """
+    import importlib
+    for name in TSUMEGO_SUBMODULES:
+        mod = sys.modules.get(f"tsumego.{name}")
+        if mod is not None:
+            try:
+                importlib.reload(mod)
+            except Exception as e:  # noqa: BLE001
+                print(f"  ! could not reload tsumego.{name} (ignored): {e}")
 
 
 def _import_tsumego():
@@ -74,7 +97,7 @@ BAR_JS = """
   }
   btn.onclick=function(){
     var sel=document.getElementById('tzScope');
-    var limit=sel?parseInt(sel.value,10):25;
+    var limit=sel?parseInt(sel.value,10):10;
     btn.disabled=true;
     stat.textContent='Fetching '+limit+' runs -- this takes a while, you can leave the page';
     log.textContent=''; log.classList.add('on');
@@ -93,12 +116,19 @@ BAR_JS = """
 """
 
 
-#: (runs, label) -- the estimate assumes ~11 requests per run at ~3.2s each,
-#: which is the site's own rate limit (see tsumego/api.py MIN_DELAY).
-REFRESH_SCOPES = [(10, "10 newest runs (~6 min)"),
-                  (25, "25 newest runs (~15 min)"),
-                  (50, "50 newest runs (~30 min)"),
-                  (100, "100 newest runs (~1 hour)")]
+#: (runs, label). ~11 requests per run at the 6s floor in tsumego/api.py, so
+#: about a minute per run.
+#:
+#: Small batches are genuinely better here, not just safer: the site's throttle
+#: escalates with *sustained* traffic, so one long unbroken crawl trips it
+#: partway and then crawls at 20-30s/request, while several short batches with
+#: gaps between them keep hitting the fast path. Fetching is resumable and
+#: skips what is cached, so five batches of 10 cost less wall-clock than one
+#: batch of 50.
+REFRESH_SCOPES = [(5, "5 newest runs (~5 min)"),
+                  (10, "10 newest runs (~11 min)"),
+                  (25, "25 newest runs (~28 min)"),
+                  (50, "50 newest runs (~55 min)")]
 
 
 def _bar_html(status, embed, can_refresh=True):
@@ -112,8 +142,9 @@ def _bar_html(status, embed, can_refresh=True):
             f"<select id='tzScope' title='Already-cached runs are skipped, so "
             f"re-running continues where you left off'>{opts}</select>"
             "<button id='tzRefresh' title='Fetch runs you have not cached yet. "
-            "The site allows about one request every 3 seconds, so this takes a "
-            "while -- it runs in the background and is resumable.'>"
+            "The site throttles to roughly one request every 6 seconds, so this "
+            "is slow by necessity -- it runs in the background, is resumable, "
+            "and several short batches beat one long crawl.'>"
             "&#10227; Fetch from 101weiqi</button>")
     else:
         refresh = ""
@@ -240,6 +271,10 @@ def do_tsumego_refresh(job, body):
     mods, err = _import_tsumego()
     if not mods:
         raise RuntimeError(f"The tsumego package could not be imported ({err}).")
+    reload_tsumego()                     # run what is on disk, not what was
+    mods, err = _import_tsumego()        # imported when the server started
+    if not mods:
+        raise RuntimeError(f"The tsumego package could not be reloaded ({err}).")
     from tsumego.api import Client, NotLoggedIn
 
     limit = int((body or {}).get("limit") or DEFAULT_REFRESH_LIMIT)
