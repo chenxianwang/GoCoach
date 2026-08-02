@@ -13,7 +13,7 @@ from .listing import list_games_dirs, list_reports, report_dir_from_rel
 from .shell import analyze_page, dashboard_page
 from .compare import compare_page
 from .pages_misc import summary_page, terms_page
-from .tsumego_page import do_tsumego_refresh, tsumego_page
+from .tsumego_page import do_tsumego_hide, do_tsumego_refresh, tsumego_page
 from .report_serve import render_report
 from .config_jobs import _safe_cfg, do_analyze, do_import, set_default_config
 from .board_api import render_board_svg
@@ -204,6 +204,10 @@ class Handler(BaseHTTPRequestHandler):
             jid, err = JOBS.start(lambda job: do_import(job, body))
             self._json(200 if jid else 409,
                        {"job": jid} if jid else {"error": err})
+            return
+        if path == "/api/tsumego_hide":
+            ok, message = do_tsumego_hide(self._read_json())
+            self._json(200 if ok else 400, {"ok": ok, "message": message})
             return
         if path == "/api/tsumego_refresh":
             body = self._read_json()

@@ -5,6 +5,7 @@ hand-written SVG, everything inlined so the file can be opened offline or
 mailed to someone.
 """
 
+import json
 import html
 import datetime
 
@@ -65,6 +66,28 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .kindbox .k .n{font-size:23px;font-weight:650}
 .kindbox .k p{font-size:12.5px;color:#667085;margin:6px 0 0}
 .note{background:#fffbea;border:1px solid #f5e6a8;border-radius:8px;padding:12px 14px;font-size:13.5px;margin-top:10px}
+.kindbox .k.open{cursor:pointer;transition:border-color .12s,box-shadow .12s}
+.kindbox .k.open:hover{border-color:#98a2b3;box-shadow:0 2px 10px #0f172a12}
+.kindbox .k.on{border-color:#1a202c;box-shadow:0 0 0 1px #1a202c}
+.kfoot{margin-top:10px;padding-top:9px;border-top:1px solid #eef0f3;
+  font-size:12.5px;color:#475467;font-weight:600;display:flex;
+  justify-content:space-between;align-items:center}
+.chev{color:#98a2b3;font-size:17px;line-height:1}
+.drill{margin-top:14px}
+.drill .hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.drill .hd h3{margin:0;font-size:16px}
+.drill .hd .cnt{color:#667085;font-size:13px}
+.drill .x{margin-left:auto;background:none;border:1px solid #e4e7ec;border-radius:7px;
+  padding:5px 11px;font:inherit;font-size:12.5px;color:#475467;cursor:pointer}
+.drill .x:hover{background:#f2f4f7}
+tr.done td{opacity:.45}
+button.ok{background:#2f9e44;color:#fff;border:0;border-radius:7px;padding:5px 11px;
+  font:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap}
+button.ok:hover{background:#37b24d}
+button.undo{background:#fff;color:#475467;border:1px solid #d0d5dd;border-radius:7px;
+  padding:5px 11px;font:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap}
+button.undo:hover{background:#f2f4f7}
+button.ok[disabled],button.undo[disabled]{opacity:.5;cursor:default}
 .foot{color:#98a2b3;font-size:12px;margin-top:40px;text-align:center}
 svg{display:block;max-width:100%}
 """
@@ -173,19 +196,30 @@ def _headline(agg):
                "point of separating them.</p>")
     pending = k.get("unclassified", 0)
     known = max(1, total_fail - pending)
+    by_kind = agg.get("by_kind") or {}
     out.append("<div class='kindbox'>")
     shown = ["trap", "depth", "off_book"]
     if k.get("timeout"):
         shown.append("timeout")
     for kind in shown:
         n = k.get(kind, 0)
+        rows = by_kind.get(kind) or []
+        left = sum(1 for r in rows if not r["hidden"])
+        done = len(rows) - left
+        done_note = (f" &middot; {done} understood" if done else "")
         out.append(
-            f"<div class='k'><span class='tag' style='background:{KIND_COLOR[kind]}'>"
+            f"<div class='k open' id='kind-{kind}' onclick=\"showKind('{kind}')\" "
+            f"title='Click to list these problems'>"
+            f"<span class='tag' style='background:{KIND_COLOR[kind]}'>"
             f"{esc(KIND_LABEL[kind])}</span>"
             f"<div class='n'>{n:,} <span style='font-size:14px;color:#667085'>"
             f"({n / known * 100:.0f}% of classified misses)</span></div>"
-            f"<p>{esc(KIND_BLURB[kind])}</p></div>")
+            f"<p>{esc(KIND_BLURB[kind])}</p>"
+            f"<div class='kfoot'>{left} problem{'' if left == 1 else 's'} to "
+            f"work through{done_note} <span class='chev'>&rsaquo;</span></div>"
+            f"</div>")
     out.append("</div>")
+    out.append("<div class='drill' id='drill'></div>")
     if pending:
         out.append(
             f"<div class='note'><b>{pending:,} of your {total_fail:,} misses are "
@@ -348,7 +382,104 @@ def _trend(agg):
             f"<div class='panel'>{line_chart(pts, ylabel='accuracy')}</div>")
 
 
-def build_html(agg, need=8, total=10):
+DRILL_JS = r"""
+<script>
+var KINDS = __KINDS__;
+var INTERACTIVE = __INTERACTIVE__;
+var openKind = null;
+
+function esc(s){ return String(s==null?'':s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function detail(r){
+  if(r.kind==='trap')
+    return 'you played <b class="mv bad">'+esc(r.my_first)+'</b>, correct is '
+      + '<b class="mv good">'+esc(r.best_move)+'</b> · '
+      + Math.round(r.my_first_share*100)+'% of players pick yours';
+  if(r.kind==='depth')
+    return 'right idea, left the correct line at your move '
+      + ((r.diverge_at==null?0:r.diverge_at)+1)
+      + ' · correct start <b class="mv good">'+esc(r.best_move)+'</b>';
+  if(r.kind==='off_book')
+    return 'you played <b class="mv bad">'+esc(r.my_first)+'</b>, which is not in '
+      + 'the answer tree · correct is <b class="mv good">'+esc(r.best_move)+'</b>';
+  if(r.kind==='timeout')
+    return 'clock expired after '+(r.costtime||0)+'s, no move played · '
+      + 'correct is <b class="mv good">'+esc(r.best_move)+'</b>';
+  return '';
+}
+
+function showKind(kind){
+  var box=document.getElementById('drill');
+  document.querySelectorAll('.kindbox .k').forEach(function(el){
+    el.classList.toggle('on', el.id==='kind-'+kind && openKind!==kind); });
+  if(openKind===kind){ openKind=null; box.innerHTML=''; return; }
+  openKind=kind;
+  var rows=(KINDS[kind]||[]);
+  var left=rows.filter(function(r){return !r.hidden;});
+  var done=rows.length-left.length;
+  var h='<div class="hd"><h3>'+esc(kind==='trap'?'Traps':
+        kind==='depth'?'Ran out of reading':
+        kind==='off_book'?'Off-book':'Ran out of clock')+'</h3>'
+      +'<span class="cnt">'+left.length+' to work through'
+      +(done? ' · '+done+' understood':'')+'</span>'
+      +'<button class="x" onclick="showKind(\''+kind+'\')">close</button></div>';
+  if(!rows.length){ box.innerHTML=h+'<div class="panel"><p class="sub">Nothing here — nice.</p></div>'; return; }
+  h+='<div class="panel"><table><tr><th>Problem</th><th>Type</th>'
+    +'<th class="num">Met</th><th>What happened</th><th class="num">Solve rate</th>'
+    +(INTERACTIVE?'<th></th>':'')+'</tr>';
+  rows.forEach(function(r){
+    h+='<tr id="row-'+r.qid+'" class="'+(r.hidden?'done':'')+'">'
+      +'<td><a href="https://www.101weiqi.com/q/'+r.publicid+'/" target="_blank" '
+      +'rel="noopener">Q-'+r.publicid+'</a></td>'
+      +'<td>'+esc(r.qtypename)+'</td>'
+      +'<td class="num">'+r.times+'×</td>'
+      +'<td>'+detail(r)+'</td>'
+      +'<td class="num">'+(r.crowd_rate==null?'--':Math.round(r.crowd_rate*100)+'%')+'</td>'
+      +(INTERACTIVE?'<td class="num"><button class="'+(r.hidden?'undo':'ok')+'" '
+        +'id="btn-'+r.qid+'" onclick="mark('+r.qid+','+(r.hidden?'false':'true')+')">'
+        +(r.hidden?'Bring back':'Understood')+'</button></td>':'')
+      +'</tr>';
+  });
+  box.innerHTML=h+'</table></div>';
+  box.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function mark(qid, hide){
+  var btn=document.getElementById('btn-'+qid);
+  if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  fetch('/api/tsumego_hide',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({qid:qid, hidden:hide})})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(!d.ok) throw new Error(d.message||'failed');
+      (KINDS[openKind]||[]).forEach(function(r){ if(r.qid===qid) r.hidden=hide; });
+      var k=openKind; openKind=null; showKind(k);   // re-render, stay open
+      var card=document.getElementById('kind-'+k);
+      if(card){ var f=card.querySelector('.kfoot');
+        var rows=KINDS[k]||[], left=rows.filter(function(r){return !r.hidden;}).length;
+        var done=rows.length-left;
+        if(f) f.innerHTML=left+' problem'+(left===1?'':'s')+' to work through'
+          +(done?' &middot; '+done+' understood':'')+' <span class="chev">&rsaquo;</span>';
+      }
+    })
+    .catch(function(e){
+      if(btn){ btn.disabled=false; btn.textContent='Could not save'; }
+    });
+}
+</script>
+"""
+
+
+def _drill_js(agg, interactive):
+    """The per-category lists, embedded as data so the page stays one file."""
+    payload = {k: v for k, v in (agg.get("by_kind") or {}).items()
+               if k != "unclassified"}
+    return (DRILL_JS
+            .replace("__KINDS__", json.dumps(payload, ensure_ascii=False))
+            .replace("__INTERACTIVE__", "true" if interactive else "false"))
+
+def build_html(agg, need=8, total=10, interactive=False):
     body = [
         "<div class='wrap'>",
         "<h1>Skill Test diagnostics</h1>",
@@ -366,6 +497,7 @@ def build_html(agg, need=8, total=10):
         _trend(agg),
         "<p class='foot'>Built from your own 101weiqi Skill Test records.</p>",
         "</div>",
+        _drill_js(agg, interactive),
     ]
     return ("<!doctype html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width,initial-scale=1'>"

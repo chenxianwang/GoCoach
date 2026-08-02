@@ -181,8 +181,14 @@ def _rate(rows, pred=lambda a: a["result"] == CORRECT):
     return sum(1 for a in rows if pred(a)) / len(rows)
 
 
-def analyse(runs, load_diagram):
-    """Build every table the dashboard renders."""
+def analyse(runs, load_diagram, hidden=None):
+    """Build every table the dashboard renders.
+
+    `hidden` is the set of qids marked understood. They stay in every count --
+    hiding a problem does not change the diagnosis of what already happened --
+    and are only filtered out of the lists you work through.
+    """
+    hidden = {str(q) for q in (hidden or ())}
     attempts = []
     for run in runs:
         for q in run.get("questions", []):
@@ -276,25 +282,35 @@ def analyse(runs, load_diagram):
         } for qid, rows in seen.items() if len(rows) > 1),
         key=lambda d: (-d["failed"], -d["seen"]))
 
-    # The traps that cost the most -- shared misconceptions, highest leverage.
-    # Grouped by problem: falling for the same trap five times is one lesson to
-    # learn, not five rows, and the repeat count is the whole point.
-    trap_groups = defaultdict(list)
-    for a in failed:
-        if a["kind"] == "trap":
-            trap_groups[a["qid"]].append(a)
-    traps = sorted(({
-        "qid": qid,
-        "publicid": rows[0]["publicid"],
-        "qtypename": rows[0]["qtypename"],
-        "levelname": rows[0]["levelname"],
-        "times": len(rows),
-        "my_first": rows[-1]["my_first"],
-        "best_move": rows[-1]["best_move"],
-        "my_first_share": rows[-1]["my_first_share"],
-        "crowd_rate": rows[0]["crowd_rate"],
-    } for qid, rows in trap_groups.items()),
-        key=lambda d: (-d["times"], -d["my_first_share"]))
+    # Per-category drill lists, grouped by problem: meeting the same trap five
+    # times is one lesson to learn, not five rows, and the repeat count is the
+    # whole point. `hidden` marks the ones already understood -- they stay in
+    # the data (the diagnosis of what happened does not change) but the page
+    # keeps them out of the list to work through.
+    by_kind = {}
+    for kind in ("trap", "depth", "off_book", "timeout", "unclassified"):
+        groups = defaultdict(list)
+        for a in failed:
+            if a["kind"] == kind:
+                groups[a["qid"]].append(a)
+        by_kind[kind] = sorted(({
+            "qid": qid,
+            "publicid": rows[0]["publicid"],
+            "qtypename": rows[0]["qtypename"],
+            "levelname": rows[0]["levelname"],
+            "kind": kind,
+            "times": len(rows),
+            "my_first": rows[-1]["my_first"],
+            "best_move": rows[-1]["best_move"],
+            "my_first_share": rows[-1]["my_first_share"],
+            "diverge_at": rows[-1]["diverge_at"],
+            "costtime": rows[-1]["costtime"],
+            "crowd_rate": rows[0]["crowd_rate"],
+            "last_at": max((r.get("at") or 0) for r in rows),
+            "hidden": str(qid) in hidden,
+        } for qid, rows in groups.items()),
+            key=lambda d: (-d["times"], -d["my_first_share"]))
+    traps = by_kind["trap"]
 
     # rolling accuracy over time
     trend = _trend(attempts)
@@ -316,6 +332,8 @@ def analyse(runs, load_diagram):
         "traps": traps,
         "trend": trend,
         "runs": runs_summary,
+        "by_kind": by_kind,
+        "n_hidden": len(hidden),
         "median_time": _median([a["costtime"] for a in attempts if a["costtime"]]),
         "median_time_correct": _median(
             [a["costtime"] for a in attempts

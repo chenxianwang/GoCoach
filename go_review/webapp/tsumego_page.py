@@ -25,7 +25,7 @@ DEFAULT_REFRESH_LIMIT = 10   # small batches beat one long crawl -- see REFRESH_
 
 
 #: dependency order -- api before crawl/analyze, which report and the CLI use
-TSUMEGO_SUBMODULES = ["api", "analyze", "crawl", "report"]
+TSUMEGO_SUBMODULES = ["api", "hidden", "analyze", "crawl", "report"]
 
 
 def reload_tsumego():
@@ -247,8 +247,12 @@ def tsumego_page(embed=False, need=8, total=10):
     if not runs:
         return _setup_help(embed=embed, can_refresh=can_refresh)
 
-    agg = analyze.analyse(runs, crawl.load_diagram)
-    doc = report.build_html(agg, need=need, total=total)
+    from tsumego import hidden as hidden_store
+    agg = analyze.analyse(runs, crawl.load_diagram, hidden=hidden_store.load())
+    # interactive=True turns on the "Understood" buttons, which need the API
+    # below; a dashboard built by the CLI has no server to talk to, so it gets
+    # the same lists read-only rather than buttons that would silently fail.
+    doc = report.build_html(agg, need=need, total=total, interactive=True)
     return _inject(doc, _bar_html(_status_line(agg, runs), embed,
                                   can_refresh=can_refresh))
 
@@ -290,3 +294,23 @@ def do_tsumego_refresh(job, body):
           f"{client.delay:.1f}s, so this is slow by necessity.\n")
     mods["crawl"].crawl(client, limit=limit, log=print)
     print("\nCache updated -- the page will reload.")
+
+
+def do_tsumego_hide(body):
+    """Mark a problem understood, or bring it back.
+
+    Stored server-side (tsumego/data/hidden.json) so the mark survives a
+    rebuild and a different browser. Returns the new hidden count so the page
+    can update its card without a reload.
+    """
+    mods, err = _import_tsumego()
+    if not mods:
+        return False, f"The tsumego package could not be imported ({err})."
+    from tsumego import hidden as hidden_store
+    try:
+        qid = int((body or {}).get("qid"))
+    except (TypeError, ValueError):
+        return False, "Missing or invalid qid."
+    want = bool((body or {}).get("hidden", True))
+    n = hidden_store.set_hidden(qid, want)
+    return True, f"{n} marked understood."

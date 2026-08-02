@@ -288,6 +288,43 @@ def test_run_length_comes_from_the_result_page():
     assert out["questions"][-1]["moves"] == []
 
 
+def test_hidden_problems_leave_the_counts_alone():
+    """Marking a problem understood filters the drill list but must not rewrite
+    history -- the diagnosis of what already happened does not change."""
+    run = {"guanid": 1, "number": 13, "t": 1,
+           "questions": [dict(Q2, n=1), dict(Q1, n=2)]}
+    dias = {Q1["qid"]: D1, Q2["qid"]: D2}
+    plain = analyze.analyse([run], lambda q: dias.get(q))
+    marked = analyze.analyse([run], lambda q: dias.get(q), hidden={Q2["qid"]})
+
+    # counts identical
+    assert marked["kinds"] == plain["kinds"]
+    assert marked["accuracy"] == plain["accuracy"]
+    assert marked["n"] == plain["n"]
+    # only the drill list is flagged
+    traps = marked["by_kind"]["trap"]
+    assert len(traps) == 1 and traps[0]["hidden"] is True
+    assert marked["by_kind"]["off_book"][0]["hidden"] is False
+    assert marked["n_hidden"] == 1
+    assert plain["by_kind"]["trap"][0]["hidden"] is False
+
+
+def test_every_failure_kind_gets_a_drill_list():
+    run = {"guanid": 1, "number": 13, "t": 1, "questions": [
+        dict(Q1, n=1), dict(Q2, n=2), dict(Q3, n=3),
+        dict(Q1, n=4, expired=True, moves=[]),
+    ]}
+    dias = {q["qid"]: d for q, d in FIXTURES}
+    agg = analyze.analyse([run], lambda q: dias.get(q))
+    for kind in ("trap", "depth", "off_book", "timeout"):
+        assert kind in agg["by_kind"], kind
+    # grouped by problem, carrying what the list needs to render
+    row = agg["by_kind"]["trap"][0]
+    for field in ("qid", "publicid", "qtypename", "times", "my_first",
+                  "best_move", "crowd_rate", "hidden", "kind"):
+        assert field in row, field
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

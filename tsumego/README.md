@@ -67,6 +67,28 @@ cheap. Interrupt it any time.
 `--need` / `--total` control the pass-rate projection ("what accuracy buys
 you"). Set them to match the level you are chasing.
 
+## Working through the misses
+
+Each of the four cards under **How you get them wrong** is clickable: it opens
+the list of problems in that category, grouped by problem (meeting the same
+trap five times is one lesson, not five rows) and showing what actually
+happened — the move you played, the correct one, how many other players pick
+yours, and how often everyone else solves it.
+
+Press **Understood** on a problem you have properly learned and it drops out of
+the list. The mark is stored in `data/hidden.json`, keyed by the site's question
+id, so it survives a rebuild and applies the next time you meet that problem.
+**Bring back** undoes it.
+
+Hiding a problem does **not** change any count. The cards keep reporting what
+actually happened — the diagnosis of your last 500 questions is history and
+should not quietly rewrite itself — so a card reads e.g. `158` with a footer of
+`152 problems to work through · 6 understood`.
+
+The buttons need the server, so they appear on the Skill Test page in the app.
+A dashboard built with `python3 -m tsumego report` has nothing to POST to, so
+it shows the same lists read-only rather than buttons that would silently fail.
+
 ## Rate limiting — read this before a big crawl
 
 **The site allows roughly one request every 3 seconds.** When you go faster it
