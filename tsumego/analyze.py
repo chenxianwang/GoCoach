@@ -128,6 +128,14 @@ def classify(question, diagram):
         out["diverge_at"] = None
         return out
 
+    if question.get("expired"):
+        # The clock ran out and no move was ever played. Not a misread -- there
+        # is no move to diagnose -- so it gets its own category rather than
+        # being lumped in with the guesses.
+        out["kind"] = "timeout"
+        out["diverge_at"] = None
+        return out
+
     if not diagram:
         # No crowd tree fetched yet (they are throttled harder than the record
         # pages, so a crawl often lands the runs first). Without it we cannot

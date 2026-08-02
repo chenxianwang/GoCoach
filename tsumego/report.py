@@ -14,12 +14,14 @@ KIND_LABEL = {
     "trap": "Trap",
     "off_book": "Off-book",
     "depth": "Ran out of reading",
+    "timeout": "Ran out of clock",
     "correct": "Solved",
 }
 KIND_COLOR = {
     "trap": "#e8590c",
     "off_book": "#c92a2a",
     "depth": "#1c7ed6",
+    "timeout": "#7048e8",
     "correct": "#2f9e44",
 }
 KIND_BLURB = {
@@ -33,6 +35,9 @@ KIND_BLURB = {
               "was right; the reading ran out. This is the one that responds "
               "directly to \"read to the end, including the opponent's best "
               "resistance, before you play\"."),
+    "timeout": ("The clock expired before you played anything at all. Not a "
+                "misread -- there is no move to diagnose. Look at where these "
+                "sit in the run: time spent early is what leaves none here."),
 }
 
 CSS = """
@@ -169,7 +174,10 @@ def _headline(agg):
     pending = k.get("unclassified", 0)
     known = max(1, total_fail - pending)
     out.append("<div class='kindbox'>")
-    for kind in ("trap", "depth", "off_book"):
+    shown = ["trap", "depth", "off_book"]
+    if k.get("timeout"):
+        shown.append("timeout")
+    for kind in shown:
         n = k.get(kind, 0)
         out.append(
             f"<div class='k'><span class='tag' style='background:{KIND_COLOR[kind]}'>"

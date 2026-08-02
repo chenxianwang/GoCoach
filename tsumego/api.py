@@ -202,6 +202,20 @@ class Client:
             raise NotLoggedIn("Could not read records -- probably not logged in.")
         return recs
 
+    def run_result(self, number, guanid):
+        """The run's own result page: how many questions it had and how each
+        went.
+
+        `task_data.questioncount` is authoritative, which matters because the
+        question pages alone cannot tell you where a run ends -- walking until
+        something looks missing both wastes a request and silently truncates a
+        run whose last question timed out (those record no move at all).
+
+        Returns {questioncount, qs: [{qid, result, isexpaired, answertime}]}.
+        """
+        html = self.get(f"/guan/result/{number}/{guanid}/")
+        return extract_js_var(html, "task_data")
+
     def question(self, number, guanid, n):
         """One question of one run, or None once the run has no nth question."""
         html = self.get(f"/guan/record/{number}/{guanid}/{n}/")

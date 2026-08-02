@@ -235,6 +235,59 @@ def test_run_walk_stops_at_totaltime():
     assert len(out["questions"]) == 3
 
 
+def test_timed_out_question_is_its_own_category():
+    """A question whose clock expired records no move at all (pts: []). It is a
+    real attempt and must be counted, but there is nothing to diagnose, so it
+    must not be filed as a guess."""
+    expired = dict(Q1, expired=True, moves=[], costtime=46, result=2)
+    a = analyze.classify(expired, D1)
+    assert a["kind"] == "timeout"
+    assert a["diverge_at"] is None
+    # and it still counts as an attempted question
+    run = {"guanid": 1, "number": 13, "t": 1, "questions": [Q4, expired]}
+    agg = analyze.analyse([run], lambda qid: {Q1["qid"]: D1, Q4["qid"]: D4}.get(qid))
+    assert agg["n"] == 2
+    assert agg["accuracy"] == 0.5
+    assert agg["kinds"]["timeout"] == 1
+
+
+def test_run_length_comes_from_the_result_page():
+    """questioncount is authoritative. Walking until something looks missing
+    truncates a run whose last question timed out, because an expired question
+    looks identical to 'no such question'."""
+    from tsumego import crawl
+    calls = []
+
+    class FakeClient:
+        delay = 6.0
+        def run_result(self, number, guanid):
+            return {"questioncount": 3, "qs": []}
+        def question(self, number, guanid, n):
+            calls.append(n)
+            expired = (n == 3)          # last one timed out: no move played
+            return {"qid": 200 + n, "qtypename": "Tesuji", "lu": 19,
+                    "myan": {"st": 2, "result": 2 if expired else 1,
+                             "costtime": 46 if expired else 10,
+                             "isexpaired": expired,
+                             "pts": [] if expired else [{"p": "mf"}]},
+                    "taskresult": {}}
+
+    import tempfile
+    old = crawl.RUNS
+    with tempfile.TemporaryDirectory() as d:
+        crawl.RUNS = d
+        try:
+            out = crawl.fetch_run(FakeClient(),
+                                  {"guanid": 1, "number": 13, "totaltime": 66},
+                                  log=lambda *a: None)
+        finally:
+            crawl.RUNS = old
+    assert calls == [1, 2, 3]                 # no doomed 4th request
+    assert len(out["questions"]) == 3         # the timed-out one is kept
+    assert out["questions"][-1]["expired"] is True
+    assert out["questions"][-1]["moves"] == []
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

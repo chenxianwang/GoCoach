@@ -65,6 +65,7 @@ def slim_question(q, n):
         "inerror": q.get("inerror"),          # in your error book
         # your attempt
         "result": an.get("result"),           # 1 = correct, 2 = wrong
+        "expired": bool(an.get("isexpaired")),  # clock ran out; no move played
         "costtime": an.get("costtime"),       # seconds spent
         "at": an.get("lasttime"),             # unix ts
         "answered": an.get("st"),
@@ -95,32 +96,29 @@ def fetch_run(client, rec, refresh_diagrams=False, log=log_print):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    # The run index reports totaltime, and it is exactly the sum of the
-    # questions' costtime. Using it as the stop condition means we never request
-    # the non-existent question after the last one -- which mattered: that extra
-    # request is the one most likely to be throttled, and losing it used to
-    # discard the entire run we had just spent a minute fetching.
-    budget = rec.get("totaltime") or 0
-    spent = 0
+    # Ask the run's result page how many questions it had. Guessing from the
+    # question pages alone is wrong twice over: it costs one doomed request past
+    # the end (the one most likely to be throttled), and it silently truncates a
+    # run whose last question **timed out** -- an expired question records
+    # `pts: []`, which is indistinguishable from "no such question".
+    info = client.run_result(number, guanid) or {}
+    count = info.get("questioncount") or 0
 
     questions = []
-    for n in range(1, MAX_QUESTIONS + 1):
+    for n in range(1, (count or MAX_QUESTIONS) + 1):
         q = client.question(number, guanid, n)
         if not q:
             break
         an = q.get("myan") or {}
-        # st != 2 means the question was never answered -> run ended earlier
-        if an.get("st") != 2 or not an.get("pts"):
-            break
+        if an.get("st") != 2:
+            break                     # genuinely never attempted
         questions.append(slim_question(q, n))
-        spent += an.get("costtime") or 0
         # One question is several seconds of enforced waiting, so say so as we
         # go -- otherwise a run looks frozen for well over a minute.
-        log(f"    run {guanid} q{n}: "
-            f"{'correct' if an.get('result') == 1 else 'wrong'} "
+        verdict = ("timed out" if an.get("isexpaired")
+                   else "correct" if an.get("result") == 1 else "wrong")
+        log(f"    run {guanid} q{n}: {verdict} "
             f"({q.get('qtypename') or '?'}, {an.get('costtime')}s)")
-        if budget and spent >= budget:
-            break
 
     if not questions:
         return None
