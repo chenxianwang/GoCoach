@@ -6,6 +6,32 @@ from .constants import PHASES, PHASE_COLOR, PHASE_LABEL, PTS_BLUNDER, WR_BLUNDER
 from .data import esc, parse_date
 
 
+# ---- text measurement -------------------------------------------------------
+# SVG has no way to measure text before it is laid out, so the phase-mean row
+# used to be built on a fixed 74px slot per entry. "Middlegame 2.44" needs ~91,
+# so the long labels ran into the next entry ("Middlegame 2.44Yose 3.78").
+# Approximating the advance width per character fixes it for any label: the
+# estimate only has to be close, since erring high just leaves a little more air.
+_NARROW = set(".,:;'|!iljtfrI ")     # ~0.30 em
+_WIDE = set("mMWw@")                 # ~0.87 em
+_CAPS = set("ABCDEFGHJKLNOPQRSTUVXYZ")   # ~0.68 em (M and W are in _WIDE)
+
+
+def text_width(s, size, bold=False):
+    """Approximate rendered width of `s` at `size` px, in px."""
+    w = 0.0
+    for ch in str(s):
+        if ch in _NARROW:
+            w += 0.30
+        elif ch in _WIDE:
+            w += 0.87
+        elif ch in _CAPS:
+            w += 0.68
+        else:
+            w += 0.55
+    return w * size * (1.06 if bold else 1.0)
+
+
 # ---- per-game data embedded for the JS date-range filter --------------------
 
 def _games_data_js(chron):
@@ -110,19 +136,26 @@ def trend_chart(title, labels, series, ylabel, width=760, height=250,
             av = (sum(nums) / len(nums)) if nums else 0.0
             txt = f"{av:.1f}"
         avgs.append((sname, scolor, txt))
-    entry_w = 74
-    row_w = 44 + entry_w * len(avgs)
+    # Each entry is measured rather than given a fixed slot -- see text_width.
+    lead_w = text_width("phase mean", 9.5) + 10
+    entry_ws = [11 + text_width(f"{sname} {txt}", 10) for sname, _, txt in avgs]
+    gap = 14
+    row_w = lead_w + sum(entry_ws) + gap * max(0, len(entry_ws) - 1)
     ax = max(pad_l, width - pad_r - row_w)
+    # If the row would run into the title, drop it onto its own line underneath
+    # rather than letting the two collide. Still above the plot (pad_t = 54).
     ay = 20
+    if ax < pad_l + text_width(title, 14, bold=True) + 12:
+        ay = 38
     p.append(f'<text x="{ax:.1f}" y="{ay}" font-size="9.5" fill="#aaa" '
              f'font-weight="600">phase mean</text>')
-    ax += 44
-    for sname, scolor, txt in avgs:
+    ax += lead_w
+    for (sname, scolor, txt), ew in zip(avgs, entry_ws):
         p.append(f'<circle cx="{ax+3:.1f}" cy="{ay-3:.1f}" r="3" '
                  f'fill="{scolor}"/>')
         p.append(f'<text x="{ax+11:.1f}" y="{ay}" font-size="10" '
                  f'fill="#444">{esc(sname)} {esc(txt)}</text>')
-        ax += entry_w
+        ax += ew + gap
 
     # y gridlines + labels
     for k in range(5):
@@ -382,6 +415,19 @@ def _date_filter_js(chron):
   function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
+  // Approximate text width -- the twin of text_width() in report/charts.py.
+  // Keep the two in step: they lay out the same chart.
+  var NARROW=".,:;'|!iljtfrI ", WIDE="mMWw@", CAPS="ABCDEFGHJKLNOPQRSTUVXYZ";
+  function textW(s, size, bold){
+    var w=0;
+    String(s).split('').forEach(function(c){
+      w += NARROW.indexOf(c)>=0 ? 0.30
+         : WIDE.indexOf(c)>=0   ? 0.87
+         : CAPS.indexOf(c)>=0   ? 0.68 : 0.55;
+    });
+    return w*size*(bold?1.06:1);
+  }
+
   GR.inRange = function(d){
     if(!d) return !(GR.range.from || GR.range.to);   // undated: only when "All"
     if(GR.range.from && d < GR.range.from) return false;
@@ -476,18 +522,25 @@ def _date_filter_js(chron):
       'style="background:#fff;border:1px solid #e3e3e3;border-radius:8px">'];
     p.push('<text x="'+pl+'" y="20" font-size="14" font-weight="700" '+
       'fill="#1a202c">'+esc(title)+'</text>');
-    // phase-mean row (top-right)
-    var entryW=74, rowW=44+entryW*series.length;
+    // phase-mean row (top-right). Must lay out identically to the Python
+    // renderer in report/charts.py -- this redraws the same chart after a date
+    // filter, so any disagreement shows up as the row jumping on first use.
+    var leadW=textW('phase mean',9.5)+10, gap=14;
+    var entryWs=series.map(function(s,si){
+      return 11+textW(s[0]+' '+avgOv[si],10); });
+    var rowW=leadW+entryWs.reduce(function(a,b){return a+b;},0)+
+             gap*Math.max(0,entryWs.length-1);
     var ax=Math.max(pl, W-pr-rowW), ay=20;
+    if(ax < pl+textW(title,14,true)+12) ay=38;   // would hit the title
     p.push('<text x="'+ax.toFixed(1)+'" y="'+ay+'" font-size="9.5" fill="#aaa" '+
       'font-weight="600">phase mean</text>');
-    ax+=44;
+    ax+=leadW;
     series.forEach(function(s,si){
       p.push('<circle cx="'+(ax+3).toFixed(1)+'" cy="'+(ay-3).toFixed(1)+
         '" r="3" fill="'+s[1]+'"/>');
       p.push('<text x="'+(ax+11).toFixed(1)+'" y="'+ay+'" font-size="10" '+
         'fill="#444">'+esc(s[0])+' '+esc(avgOv[si])+'</text>');
-      ax+=entryW;
+      ax+=entryWs[si]+gap;
     });
     for(var k=0;k<5;k++){
       var yval=ymax*k/4, y=py(yval);
