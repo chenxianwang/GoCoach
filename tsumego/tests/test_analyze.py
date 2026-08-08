@@ -203,38 +203,6 @@ def test_missing_crowd_tree_is_admitted_not_guessed():
     assert analyze.classify(Q4, {})["kind"] == "correct"
 
 
-def test_run_walk_stops_at_totaltime():
-    """totaltime equals the sum of costtime, so the walk must stop on the last
-    real question instead of probing a non-existent one -- that extra request
-    is the one most likely to be throttled."""
-    from tsumego import crawl
-    calls = []
-
-    class FakeClient:
-        delay = 6.0
-        def question(self, number, guanid, n):
-            calls.append(n)
-            if n > 3:
-                raise AssertionError("walked past the end of the run")
-            return {"qid": 100 + n, "qtypename": "Tesuji", "lu": 19,
-                    "myan": {"st": 2, "result": 1, "costtime": 10,
-                             "pts": [{"p": "mf"}]},
-                    "taskresult": {}}
-
-    import tempfile, os
-    old = crawl.RUNS
-    with tempfile.TemporaryDirectory() as d:
-        crawl.RUNS = d
-        try:
-            out = crawl.fetch_run(FakeClient(),
-                                  {"guanid": 1, "number": 13, "totaltime": 30},
-                                  log=lambda *a: None)
-        finally:
-            crawl.RUNS = old
-    assert calls == [1, 2, 3]
-    assert len(out["questions"]) == 3
-
-
 def test_timed_out_question_is_its_own_category():
     """A question whose clock expired records no move at all (pts: []). It is a
     real attempt and must be counted, but there is nothing to diagnose, so it

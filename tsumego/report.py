@@ -61,6 +61,13 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .tag{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11.5px;font-weight:600;color:#fff}
 .mv{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600}
 .good{color:#2f9e44}.bad{color:#c92a2a}
+.h2row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:38px 0 6px}
+.h2row h2{margin:0}
+.filt{display:inline-flex;background:#eef0f3;border-radius:8px;padding:3px;gap:2px}
+.filt button{background:none;border:0;border-radius:6px;padding:4px 10px;font:inherit;
+  font-size:12.5px;color:#475467;cursor:pointer;white-space:nowrap}
+.filt button:hover{color:#1a202c}
+.filt button.on{background:#fff;color:#1a202c;font-weight:600;box-shadow:0 1px 3px #0f172a1f}
 .kindbox{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
 .kindbox .k{border:1px solid #e4e7ec;border-radius:10px;padding:14px 16px;background:#fff}
 .kindbox .k .n{font-size:23px;font-weight:650}
@@ -190,7 +197,18 @@ def _headline(agg):
                    f"<div class='l'>{esc(l)}</div></div>")
     out.append("</div>")
 
-    out.append("<h2>How you get them wrong</h2>")
+    # The filter lives next to the heading rather than inside each list: it is a
+    # property of how you are working right now ("show me what is left" vs "let
+    # me revisit what I ticked off"), not of any one category, and keeping it in
+    # one place means it does not reset every time you open a different card.
+    out.append("<div class='h2row'><h2>How you get them wrong</h2>"
+               "<div class='filt' title='Applies to every category list below'>"
+               "<button id='f-todo' class='on' onclick=\"setDrillFilter('todo')\">"
+               "To work through</button>"
+               "<button id='f-done' onclick=\"setDrillFilter('done')\">"
+               "Understood</button>"
+               "<button id='f-all' onclick=\"setDrillFilter('all')\">All</button>"
+               "</div></div>")
     out.append("<p class='sub'>Every wrong answer, matched against the crowd move "
                "tree. These three want different training, which is the whole "
                "point of separating them.</p>")
@@ -387,6 +405,7 @@ DRILL_JS = r"""
 var KINDS = __KINDS__;
 var INTERACTIVE = __INTERACTIVE__;
 var openKind = null;
+var drillFilter = 'todo';
 
 function esc(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -409,6 +428,23 @@ function detail(r){
   return '';
 }
 
+// Which rows the open list shows. The category counts are deliberately NOT
+// filtered -- 158 traps happened whether or not you have understood them since,
+// so the card and the header keep reporting what the history says.
+function filterRows(rows){
+  if(drillFilter==='done') return rows.filter(function(r){ return r.hidden; });
+  if(drillFilter==='all')  return rows.slice();
+  return rows.filter(function(r){ return !r.hidden; });
+}
+
+function setDrillFilter(f){
+  drillFilter=f;
+  ['todo','done','all'].forEach(function(x){
+    var b=document.getElementById('f-'+x);
+    if(b) b.classList.toggle('on', x===f); });
+  if(openKind){ var k=openKind; openKind=null; showKind(k); }   // re-render, stay open
+}
+
 function showKind(kind){
   var box=document.getElementById('drill');
   document.querySelectorAll('.kindbox .k').forEach(function(el){
@@ -424,11 +460,19 @@ function showKind(kind){
       +'<span class="cnt">'+left.length+' to work through'
       +(done? ' · '+done+' understood':'')+'</span>'
       +'<button class="x" onclick="showKind(\''+kind+'\')">close</button></div>';
-  if(!rows.length){ box.innerHTML=h+'<div class="panel"><p class="sub">Nothing here — nice.</p></div>'; return; }
+  var view=filterRows(rows);
+  if(!view.length){
+    var msg = !rows.length ? 'Nothing here — nice.'
+            : drillFilter==='done'
+              ? 'Nothing in this category is marked understood yet.'
+              : 'Everything in this category is marked understood.';
+    box.innerHTML=h+'<div class="panel"><p class="sub" style="margin:0">'+msg+'</p></div>';
+    return;
+  }
   h+='<div class="panel"><table><tr><th>Problem</th><th>Type</th>'
     +'<th class="num">Met</th><th>What happened</th><th class="num">Solve rate</th>'
     +(INTERACTIVE?'<th></th>':'')+'</tr>';
-  rows.forEach(function(r){
+  view.forEach(function(r){
     h+='<tr id="row-'+r.qid+'" class="'+(r.hidden?'done':'')+'">'
       +'<td><a href="https://www.101weiqi.com/q/'+r.publicid+'/" target="_blank" '
       +'rel="noopener">Q-'+r.publicid+'</a></td>'
@@ -445,6 +489,17 @@ function showKind(kind){
   box.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
+function refreshFoot(k){
+  var card=document.getElementById('kind-'+k);
+  if(!card) return;
+  var f=card.querySelector('.kfoot');
+  if(!f) return;
+  var rows=KINDS[k]||[], left=rows.filter(function(r){return !r.hidden;}).length;
+  var done=rows.length-left;
+  f.innerHTML=left+' problem'+(left===1?'':'s')+' to work through'
+    +(done?' &middot; '+done+' understood':'')+' <span class="chev">&rsaquo;</span>';
+}
+
 function mark(qid, hide){
   var btn=document.getElementById('btn-'+qid);
   if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
@@ -453,15 +508,15 @@ function mark(qid, hide){
     .then(function(r){ return r.json(); })
     .then(function(d){
       if(!d.ok) throw new Error(d.message||'failed');
-      (KINDS[openKind]||[]).forEach(function(r){ if(r.qid===qid) r.hidden=hide; });
+      // hidden.json is keyed by qid, and one problem can be filed under two
+      // categories (failed as a trap once, as a misread another time), so the
+      // mark has to land on every copy -- otherwise one card silently disagrees
+      // with the server until the next reload.
+      Object.keys(KINDS).forEach(function(k){
+        (KINDS[k]||[]).forEach(function(r){ if(r.qid===qid) r.hidden=hide; });
+        refreshFoot(k);
+      });
       var k=openKind; openKind=null; showKind(k);   // re-render, stay open
-      var card=document.getElementById('kind-'+k);
-      if(card){ var f=card.querySelector('.kfoot');
-        var rows=KINDS[k]||[], left=rows.filter(function(r){return !r.hidden;}).length;
-        var done=rows.length-left;
-        if(f) f.innerHTML=left+' problem'+(left===1?'':'s')+' to work through'
-          +(done?' &middot; '+done+' understood':'')+' <span class="chev">&rsaquo;</span>';
-      }
     })
     .catch(function(e){
       if(btn){ btn.disabled=false; btn.textContent='Could not save'; }

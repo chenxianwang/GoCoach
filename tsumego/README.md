@@ -89,6 +89,45 @@ The buttons need the server, so they appear on the Skill Test page in the app.
 A dashboard built with `python3 -m tsumego report` has nothing to POST to, so
 it shows the same lists read-only rather than buttons that would silently fail.
 
+## One problem in detail
+
+```bash
+python3 -m tsumego explain 453591     # the Q-number the site shows
+```
+
+The dashboard says *which* problems beat you. This says what happened inside
+one of them — and it surfaces the fact the site's own review does not: **where
+the problem is actually decided.**
+
+A tsumego is not uniformly hard. Walk the correct line and ask, at each of your
+turns, what share of the players who got that far found the right move. It is
+usually 80–90% for move 1 and then falls off a cliff at exactly one turn:
+
+```
+ANSWER   B N18 W O18 B N17 W M17 B M19 W N19 B O19
+
+WHERE IT IS DECIDED  (of the players still on the correct line)
+  move 1:  N18   found by 84%   others: O18 7% off-book, M19 2% loses …
+  move 2:  N17   found by 57%   others: M19 17% off-book, N19 15% loses …
+  move 3:  M19   forced -- no other move exists
+  -> the problem is move 2 (N17): 43% of the players who got this far go wrong here.
+
+YOUR ATTEMPTS
+  run 8139708 q3 (3级, 46s) -- ran out of time
+      B N18  W O18  B N17  W M17
+      2 correct move(s), then the clock ran out
+```
+
+The share at each turn is out of the players who **reached that turn**, not out
+of everyone who attempted the problem — otherwise the numbers shrink down the
+line and two turns stop being comparable, which is the only thing they are for.
+A turn with a single legal continuation is reported as *forced* rather than as
+"100% found it": those are different facts and only one of them is a compliment.
+
+There is a `tsumego` [skill](../.claude/skills/tsumego/SKILL.md) that wraps this
+into a step-by-step solving protocol — ask Claude to walk you through a problem
+and it uses this command rather than trying to read stones off a screenshot.
+
 ## Rate limiting — read this before a big crawl
 
 **The site allows roughly one request every 3 seconds.** When you go faster it
@@ -157,6 +196,7 @@ tsumego/
   api.py        session + endpoints + the qqdata/coordinate parsing
   crawl.py      resumable crawl into data/ (runs/, diagrams/)
   analyze.py    the failure taxonomy and every aggregate the dashboard shows
+  explain.py    one problem in detail: the answer, the crux, what you played
   report.py     the HTML/SVG dashboard
   __main__.py   the CLI
   tests/        real captured payloads, one per failure kind
@@ -181,8 +221,11 @@ tsumego/
 
 ```bash
 python3 -m tsumego.tests.test_analyze
+python3 -m tsumego.tests.test_explain
 ```
 
 The fixtures are four real attempts from one run (3级, 2026-08-02), one per
 failure kind, kept because they pin down the classifier against payloads the
-site actually served.
+site actually served. `test_explain` reuses them to pin down the "the problem
+is decided at move N" arithmetic, which is the strongest claim either module
+makes.

@@ -4,6 +4,7 @@
     python3 -m tsumego fetch --limit 40 --level 3级
     python3 -m tsumego report           # build the dashboard from the cache
     python3 -m tsumego report --open
+    python3 -m tsumego explain 453591   # coaching brief for one problem
 """
 
 import os
@@ -12,7 +13,7 @@ import json
 import argparse
 import webbrowser
 
-from . import crawl, report
+from . import crawl, explain, hidden, report
 from .analyze import analyse, LEVEL_NAMES
 from .api import Client, NotLoggedIn
 
@@ -47,7 +48,10 @@ def cmd_report(args):
     runs = crawl.load_runs()
     if not runs:
         raise SystemExit("No cached runs yet -- run `python3 -m tsumego fetch` first.")
-    agg = analyse(runs, crawl.load_diagram)
+    # The same understood-marks the app writes: the CLI dashboard was reading
+    # none of them, so a problem you had ticked off still showed up as work to
+    # do and the understood filter had nothing to show.
+    agg = analyse(runs, crawl.load_diagram, hidden=hidden.load())
     out = args.out or os.path.join(crawl.HERE, "dashboard.html")
     with open(out, "w", encoding="utf-8") as f:
         f.write(report.build_html(agg, need=args.need, total=args.total))
@@ -62,6 +66,18 @@ def cmd_report(args):
         print(f"Stats JSON written: {args.json}")
     if args.open:
         webbrowser.open("file://" + os.path.abspath(out))
+
+
+def cmd_explain(args):
+    runs = crawl.load_runs()
+    if not runs:
+        raise SystemExit("No cached runs yet -- run `python3 -m tsumego fetch` first.")
+    e = explain.explain(runs, crawl.load_diagram, args.id, by_qid=args.qid)
+    if e is None:
+        what = "qid" if args.qid else "Q-number"
+        raise SystemExit(f"No attempt cached for {what} {args.id}. "
+                         "It is only here if you met it in a Skill Test run.")
+    print(explain.to_text(e))
 
 
 def main(argv=None):
@@ -87,6 +103,12 @@ def main(argv=None):
     r.add_argument("--total", type=int, default=10,
                    help="questions per run (default 10)")
     r.set_defaults(func=cmd_report)
+
+    x = sub.add_parser("explain", help="coaching brief for one problem")
+    x.add_argument("id", type=int, help="the Q-number the site shows, e.g. 453591")
+    x.add_argument("--qid", action="store_true",
+                   help="treat the id as the internal qid instead")
+    x.set_defaults(func=cmd_explain)
 
     args = ap.parse_args(argv)
     args.func(args)
