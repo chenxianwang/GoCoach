@@ -1,5 +1,5 @@
 {
-  "_comment": "Your Working Desktop. Add an entry per app; the page shows one card each. `command` is run through the shell, so quoting/&& work as they do in Terminal. `cwd` accepts ~. `probe` is how the page tells whether the app is already running -- port for web apps, process for GUI ones. Only ids listed here can ever be launched; the browser never sends a command.",
+  "_comment": "Your Working Desktop. Add an entry per app; the page shows one card each. `command` is run through the shell, so quoting/&& work as they do in Terminal. `cwd` accepts ~. `probe` is how the page tells whether the app is already running -- port for web apps, process for GUI ones. Add `\"type\": \"action\"` for a one-shot command instead: no probe, no Stop, just Run and the result. Only ids listed here can ever be launched; the browser never sends a command.",
   "port": 8600,
   "apps": [
     {
@@ -40,6 +40,16 @@
         "port": 5175
       },
       "url": "http://127.0.0.1:5175/"
+    },
+    {
+      "id": "kick-tunnel",
+      "name": "Kick Cloudflare Tunnel",
+      "emoji": "🌩️",
+      "type": "action",
+      "note": "Force cloudflared to reconnect now instead of waiting out its backoff. Use when my-english-coach.com shows Error 1033.",
+      "_sudo_note": "kickstart needs root, and there is no terminal here to type a password into -- osascript asks macOS for the authorisation dialog instead, so no password is ever stored or passed on a command line.",
+      "command": "osascript -e 'do shell script \"launchctl kickstart -k system/com.cloudflare.cloudflared\" with administrator privileges'",
+      "cwd": "~"
     },
     {
       "id": "lizzie",
