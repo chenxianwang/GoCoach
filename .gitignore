@@ -5,6 +5,11 @@ tsumego/config.json
 /config.txt
 /persist
 
+# Your edited review-summary prompt. The shipped default lives in the code, so
+# this file only exists once you change it -- a local preference, not a change
+# everyone should get.
+go_review/prompts/review_summary_system.md
+
 # ── scraped 101weiqi cache + generated dashboard ────────────────
 tsumego/data/
 tsumego/dashboard.html

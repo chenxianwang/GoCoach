@@ -85,9 +85,15 @@ actually happened — the diagnosis of your last 500 questions is history and
 should not quietly rewrite itself — so a card reads e.g. `158` with a footer of
 `152 problems to work through · 6 understood`.
 
+The **To work through / Understood / All** switch beside the heading says which of
+them the lists show. It starts on *To work through*, which is the drill list; flip
+to *Understood* to revise what you have already ticked off, or *All* to see the
+raw history. It only filters the lists — the counts stay put, for the same reason.
+
 The buttons need the server, so they appear on the Skill Test page in the app.
-A dashboard built with `python3 -m tsumego report` has nothing to POST to, so
-it shows the same lists read-only rather than buttons that would silently fail.
+A dashboard built with `python3 -m tsumego report` has nothing to POST to, so it
+shows the same lists read-only rather than buttons that would silently fail — but
+it does now honour `hidden.json`, which it previously ignored altogether.
 
 ## One problem in detail
 
