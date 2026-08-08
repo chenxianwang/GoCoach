@@ -34,6 +34,25 @@ diagnostic summary** that reads those notes plus the report's own numbers and na
 weakness themes it finds in them — with every past version kept, and the system prompt
 editable from the sidebar.
 
+<p align="center">
+  <img src="docs/report.png" alt="概览：卡片 + 趋势图 · Overview: cards and trend charts" width="90%">
+</p>
+
+<p align="center">
+  <em>概览页：五张汇总卡片，以及按阶段（布局 / 中盘 / 官子）拆开的趋势图。<br>
+  Overview: the summary cards, and trends split by phase — fuseki, middlegame, yose.</em>
+</p>
+
+<p align="center">
+  <img src="docs/practice.png" alt="大错集里的语音复盘面板 · The voice review panel on the Blunder Set" width="90%">
+</p>
+
+<p align="center">
+  <em>大错集顶部的语音复盘：一次录音讲完多个局面，右上角可改音频保存位置。<br>
+  Voice review, at the top of the Blunder Set: one take covers many positions, and the
+  button on the right chooses where the audio is filed.</em>
+</p>
+
 ## 🚀 快速开始 · Quickstart
 
 **只想看看效果？** 直接打开 [`go_review/demo/review_report.html`](go_review/demo/review_report.html) —— 这是一份内置的示例报告（AlphaGo 对局），零配置即可浏览。
@@ -48,6 +67,15 @@ editable from the sidebar.
 4. 在「① 下载 + 分析」里填野狐 UID 开跑，或在「② 导入已分析 SGF」拖入 LizzieYZY 的已分析棋谱。
 
 > 分析依赖本机的 ikatago。导入 LizzieYZY 已分析 SGF **不需要**引擎。
+
+<p align="center">
+  <img src="docs/analysis.png" alt="分析 / 导入面板 · The analyse / import panel" width="90%">
+</p>
+
+<p align="center">
+  <em>第 4 步长这样：左侧是全部报告与各个工具页，右侧填 UID 与分析参数。<br>
+  Step 4: reports and tool pages on the left, UID and analysis settings on the right.</em>
+</p>
 
 ## 🔑 凭据 · Credentials
 
