@@ -15,6 +15,12 @@ h1{font-size:27px;margin:0 0 4px;letter-spacing:-.3px}
 .card{background:#131c2b;border:1px solid #243044;border-radius:14px;padding:18px 20px;
   display:flex;flex-direction:column;gap:10px}
 .card.up{border-color:#2f6f4a;box-shadow:0 0 0 1px #2f6f4a33}
+/* A one-shot action looks like a card but does not behave like one -- say so,
+   so a green border here is not read as "this app is running". */
+.card.act{background:#111a27}
+.card.act .nm::after{content:'action';margin-left:8px;padding:2px 6px;
+  font-size:10px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;
+  color:#8b98ad;background:#20293a;border-radius:5px;vertical-align:2px}
 .top{display:flex;align-items:flex-start;gap:12px}
 .emoji{font-size:26px;line-height:1.1}
 .nm{font-weight:650;font-size:16px}
@@ -37,22 +43,63 @@ pre.log{display:none;white-space:pre-wrap;word-break:break-word;background:#080d
 pre.log.on{display:block}
 .foot{color:#5d6b80;font-size:12px;margin-top:34px;text-align:center}
 .foot code{color:#8b98ad}
+.offline{display:none;background:#3a1d22;border:1px solid #7d2c38;color:#ffc9d1;
+  border-radius:12px;padding:12px 16px;margin:0 0 20px;font-size:13.5px;line-height:1.5}
+.offline.on{display:block}
+.offline code{color:#fff;background:#00000038;padding:1px 5px;border-radius:4px}
+body.offline-mode .card{opacity:.55}
 """
 
 JS = """
 <script>
 var APPS = __APPS__;
 
+// ids with a request in flight. Without this the 4s poll overwrites
+// "Running…" with a stale result -- very visible for an action sitting on a
+// password dialog, which can wait there a good while.
+var BUSY = {};
+
 function el(id){ return document.getElementById(id); }
+
+// A tab often outlives the launcher that served it: close the Working Desktop
+// window and every button here silently starts failing. Say so plainly instead
+// of leaving stale green "Running" text and a cryptic fetch error on click.
+function setOffline(on){
+  var b=el('offline'); if(b) b.classList.toggle('on', on);
+  document.body.classList.toggle('offline-mode', on);
+  if(!on) return;
+  APPS.forEach(function(id){
+    var st=el('state-'+id);
+    if(st){ st.classList.remove('on'); st.textContent='Launcher not running'; }
+    var dot=el('dot-'+id); if(dot) dot.classList.remove('on');
+    var card=el('card-'+id); if(card) card.classList.remove('up');
+    var go=el('go-'+id); if(go) go.disabled=true;
+    var stop=el('stop-'+id); if(stop) stop.disabled=true;
+    var run=el('run-'+id); if(run) run.disabled=true;
+  });
+}
 
 function refresh(){
   fetch('/api/status',{cache:'no-store'}).then(function(r){return r.json();})
   .then(function(d){
+    setOffline(false);
     (d.apps||[]).forEach(function(s){
-      var card=el('card-'+s.id); if(!card) return;
+      var card=el('card-'+s.id); if(!card || BUSY[s.id]) return;
+      var st=el('state-'+s.id);
+
+      // An action has no "running" -- it either has been run or it has not.
+      if(s.action){
+        var good = !!(s.last && s.last.ok);
+        card.classList.toggle('up', good);
+        el('dot-'+s.id).classList.toggle('on', good);
+        st.classList.toggle('on', good);
+        st.textContent = s.last ? s.last.message : 'Ready';
+        var run=el('run-'+s.id); if(run) run.disabled=false;
+        return;
+      }
+
       card.classList.toggle('up', s.running);
       el('dot-'+s.id).classList.toggle('on', s.running);
-      var st=el('state-'+s.id);
       st.classList.toggle('on', s.running);
       if(s.running){
         st.textContent = s.started_here ? 'Running (started here)'
@@ -64,23 +111,36 @@ function refresh(){
       }
       var go=el('go-'+s.id), stop=el('stop-'+s.id), open=el('open-'+s.id);
       if(go) go.disabled = s.running;
-      if(stop) stop.disabled = !(s.running && s.started_here);
+      // Anything running can be stopped -- the server finds it by port or
+      // process name, so this survives reopening the launcher window.
+      if(stop){
+        stop.disabled = !s.running;
+        stop.title = s.running && !s.started_here
+          ? 'Started outside this window \\u2014 Stop will still find and stop it'
+          : '';
+      }
       if(open) open.style.display = s.running ? 'inline-block' : 'none';
     });
-  }).catch(function(){});
+  }).catch(function(){ setOffline(true); });
 }
 
 function act(id, what){
-  var st=el('state-'+id); st.textContent = (what==='launch'?'Launching':'Stopping')+'\\u2026';
+  var st=el('state-'+id), run=el('run-'+id);
+  var word = what==='launch' ? 'Launching' : (what==='stop' ? 'Stopping' : 'Running');
+  BUSY[id]=1;
+  st.textContent = word+'\\u2026';
+  if(run) run.disabled=true;                 // a second click would run it twice
+  function done(){ delete BUSY[id]; if(run) run.disabled=false; }
   fetch('/api/'+what,{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({id:id})})
   .then(function(r){return r.json();})
   .then(function(d){
+    done();
     if(!d.ok){ st.textContent = d.message || 'Failed'; showLog(id, true); }
     setTimeout(refresh, 700);
     setTimeout(refresh, 2500);
   })
-  .catch(function(e){ st.textContent='Failed: '+e; });
+  .catch(function(){ done(); setOffline(true); });
 }
 
 function showLog(id, force){
@@ -134,18 +194,36 @@ def icon_html(app):
     return esc(app.get("emoji") or "•")
 
 
+def _head(app, aid):
+    """The dot / icon / name block every card shares."""
+    return (f"<div class='top'><div class='dot' id='dot-{aid}'></div>"
+            f"<div class='emoji'>{icon_html(app)}</div>"
+            f"<div><div class='nm'>{esc(app.get('name') or app['id'])}</div>"
+            f"<div class='note'>{esc(app.get('note') or '')}</div></div></div>")
+
+
 def _card(app):
     aid = esc(app["id"])
+
+    # An action gets one button and no Open/Stop: there is no lifetime here to
+    # open into or stop. Its dot means "the last run worked", not "it is up".
+    if (app.get("type") or "").lower() == "action":
+        return (
+            f"<div class='card act' id='card-{aid}'>"
+            f"{_head(app, aid)}"
+            f"<div class='state' id='state-{aid}'>Ready</div>"
+            f"<div class='row'>"
+            f"<button class='go' id='run-{aid}' onclick=\"act('{aid}','run')\">Run</button>"
+            f"<button class='lg' onclick=\"showLog('{aid}')\">log</button>"
+            f"</div><pre class='log' id='log-{aid}'></pre></div>")
+
     url = app.get("url")
     open_btn = (f"<a class='btn open' id='open-{aid}' href='{esc(url)}' "
                 f"target='_blank' rel='noopener' style='display:none'>Open</a>"
                 if url else "")
     return (
         f"<div class='card' id='card-{aid}'>"
-        f"<div class='top'><div class='dot' id='dot-{aid}'></div>"
-        f"<div class='emoji'>{icon_html(app)}</div>"
-        f"<div><div class='nm'>{esc(app.get('name') or app['id'])}</div>"
-        f"<div class='note'>{esc(app.get('note') or '')}</div></div></div>"
+        f"{_head(app, aid)}"
         f"<div class='state' id='state-{aid}'>Checking&hellip;</div>"
         f"<div class='row'>"
         f"<button class='go' id='go-{aid}' onclick=\"act('{aid}','launch')\">Launch</button>"
@@ -164,6 +242,10 @@ def build_html(apps, config_path):
         "<p class='sub'>Launch your local apps without opening a terminal. "
         "Status is checked live, so anything you started elsewhere still shows "
         "up here.</p>"
+        "<div class='offline' id='offline'>This page has lost its launcher &mdash; "
+        "the Working Desktop window was closed, so nothing here can be started or "
+        "stopped. Double-click <code>Working Desktop.command</code> again, then "
+        "reload. Apps already running are unaffected.</div>"
         f"<div class='grid'>{cards}</div>"
         f"<p class='foot'>Add or edit apps in <code>{esc(config_path)}</code> "
         f"and reload this page.</p>"

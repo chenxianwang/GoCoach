@@ -64,18 +64,51 @@ An app can be running without this launcher having started it — you may have
 started it from Terminal, or restarted the launcher since. So the page does not
 trust its own bookkeeping: it connects to the port (or looks for the process)
 every few seconds. That is why an app you started elsewhere still shows as
-running, with **Open** available and **Stop** greyed out — stopping something
-this process did not start is not something it can do cleanly, so it says so
-rather than pretending.
+running, with **Open** available. The card says where it came from
+("started here" vs "started elsewhere"), but either way it can be stopped.
 
 ## Stopping
 
-Apps started here run in their own process group and are stopped by signalling
-the whole group (TERM, then KILL). This matters because `command` goes through
-a shell: killing the shell alone would leave the real app orphaned and the port
-still bound.
+Stop works on anything the page shows as running, not just apps launched from
+this window. The record of what this process started dies with the process, so
+relying on it meant Stop went dead every time the launcher window was reopened.
+Instead the app is located exactly the way it is probed — by port (`lsof`) or
+process name (`pgrep`) — and that is what gets signalled: TERM, then KILL if it
+lingers, then the probe is re-checked to confirm it really went away.
+
+Signalling covers the whole process group, because `command` goes through a
+shell: killing the shell alone would leave the real app orphaned and the port
+still bound. Aiming that broadly needs care, so `procs.py` will never target
+this launcher, pid 1, or any of its ancestors — a loose `"match"` could
+otherwise sweep in the Terminal that started everything. When an app happens to
+share a process group with the launcher, only its own pid is signalled, since a
+group-wide kill there would take the launcher down too.
 
 Closing the launcher does **not** stop the apps you launched.
+
+`tests/test_stop.py` covers all of this:
+
+```bash
+python3 workdesk/tests/test_stop.py
+```
+
+## When the port is busy
+
+Closing a Terminal window does not always kill what was running in it, so an
+old launcher can outlive its window and keep port 8600. Starting a new one then
+used to fail with `OSError: [Errno 48] Address already in use` and a traceback.
+
+Now it checks what is on the port. If it is another Working Desktop, it just
+opens that one. If it is something else, it says so and suggests another port.
+
+To clear out a stale launcher by hand:
+
+```bash
+pkill -f "python3 -m workdesk"
+```
+
+Note that reusing an old launcher also means running whatever version of the
+code it started with — after editing anything here, kill it and start fresh.
 
 ## Logs
 

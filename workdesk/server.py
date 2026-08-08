@@ -14,9 +14,11 @@ Security, since this endpoint starts processes:
 import os
 import sys
 import json
+import errno
 import argparse
 import threading
 import webbrowser
+import urllib.request
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -92,7 +94,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urlparse(self.path)
-        if u.path not in ("/api/launch", "/api/stop"):
+        if u.path not in ("/api/launch", "/api/stop", "/api/run"):
             self._send(404, "not found", "text/plain; charset=utf-8")
             return
         if not self._same_origin():
@@ -103,9 +105,36 @@ class Handler(BaseHTTPRequestHandler):
         if not app:
             self._json(404, {"ok": False, "message": "Unknown app."})
             return
-        fn = procs.start if u.path == "/api/launch" else procs.stop
+
+        # Actions and apps are not interchangeable: starting an action detached
+        # would throw away the result, and stopping one has nothing to aim at.
+        action = procs.is_action(app)
+        if u.path == "/api/run":
+            if not action:
+                self._json(400, {"ok": False, "message": "Not an action."})
+                return
+            fn = procs.run_action
+        elif action:
+            self._json(400, {"ok": False, "message": "This is an action -- use Run."})
+            return
+        else:
+            fn = procs.start if u.path == "/api/launch" else procs.stop
+
         ok, message = fn(app)
         self._json(200, {"ok": ok, "message": message})
+
+
+def _is_workdesk(url, timeout=1.5):
+    """Is the thing already holding our port another Working Desktop?
+
+    Checked before pointing a browser at it, so a stray unrelated server does
+    not get presented to you as your launcher.
+    """
+    try:
+        with urllib.request.urlopen(url + "api/status", timeout=timeout) as r:
+            return isinstance(json.loads(r.read().decode()).get("apps"), list)
+    except Exception:                      # noqa: BLE001 -- any failure means "no"
+        return False
 
 
 class QuietServer(ThreadingHTTPServer):
@@ -134,10 +163,27 @@ def main(argv=None):
         raise SystemExit(f"{args.config} is not valid JSON: {e}")
 
     port = args.port or int(cfg.get("port") or 8600)
-    httpd = QuietServer((args.host, port), Handler)
+    url = f"http://{args.host}:{port}/"
+
+    try:
+        httpd = QuietServer((args.host, port), Handler)
+    except OSError as e:
+        if e.errno != errno.EADDRINUSE:
+            raise
+        # Almost always a launcher from an earlier session that outlived its
+        # Terminal window. Reuse it rather than dying with a traceback.
+        if _is_workdesk(url):
+            print(f"Working Desktop is already running at {url} -- opening it.")
+            if not args.no_browser:
+                webbrowser.open(url)
+            return 0
+        raise SystemExit(
+            f"Port {port} is busy, but it is not the Working Desktop.\n"
+            f"Something else is using it. Free that port, or start on another:\n"
+            f"    python3 -m workdesk --port {port + 1}")
+
     httpd.config_path = args.config
 
-    url = f"http://{args.host}:{port}/"
     print(f"Working Desktop: {url}")
     print(f"{len(apps)} apps from {args.config}")
     print("Close this window to stop the launcher "
