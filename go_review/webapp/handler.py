@@ -12,14 +12,16 @@ from .jobs import JOBS
 from .listing import list_games_dirs, list_reports, report_dir_from_rel
 from .shell import analyze_page, dashboard_page
 from .compare import compare_page
-from .pages_misc import summary_page, terms_page
+from .pages_misc import prompt_page, summary_page, terms_page
 from .tsumego_page import do_tsumego_hide, do_tsumego_refresh, tsumego_page
 from .report_serve import render_report
 from .config_jobs import _safe_cfg, do_analyze, do_import, set_default_config
 from .board_api import render_board_svg
-from .voice import _PROGRESS, transcribe_audio
+from .voice import _PROGRESS, browse_dirs, set_voice_audio_dir, transcribe_audio
 from .state import add_practice_hidden, load_notes, load_practice_hidden, load_voice, save_note, save_voice, set_all_hidden
-from .summary_engine import _md_to_html, build_review_summary, export_summaries_md, load_summary, summary_history_html
+from .summary_engine import (_md_to_html, build_review_summary, export_summaries_md,
+                             load_summary, load_summary_system, save_summary_system,
+                             summary_history_html, summary_system_is_custom)
 from .backup import build_backup_zip, delete_report
 
 
@@ -87,6 +89,10 @@ class Handler(BaseHTTPRequestHandler):
             rel = (parse_qs(u.query).get("report", [""])[0] or "").strip()
             self._send(200, summary_page(rel or None, embed=embed))
             return
+        if path == "/prompt":
+            rel = (parse_qs(u.query).get("report", [""])[0] or "").strip()
+            self._send(200, prompt_page(rel or None, embed=embed))
+            return
         if path == "/terms":
             self._send(200, terms_page(embed=embed))
             return
@@ -119,6 +125,14 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/voice":
             rel = (parse_qs(u.query).get("report", [""])[0] or "").strip()
             self._json(200, {"text": load_voice(rel)})
+            return
+        if path == "/api/prompt":
+            self._json(200, {"prompt": load_summary_system(),
+                             "custom": summary_system_is_custom()})
+            return
+        if path == "/api/voice_dir":
+            self._json(200, browse_dirs(
+                (parse_qs(u.query).get("path", [""])[0] or "").strip()))
             return
         if path == "/api/transcribe_progress":
             self._json(200, dict(_PROGRESS))
@@ -259,6 +273,27 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._json(200, {"html": _md_to_html(text), "md": text,
                              "history": summary_history_html(rel)})
+            return
+        if path == "/api/voice_dir":
+            body = self._read_json() or {}
+            info, err = set_voice_audio_dir(body.get("path") or "",
+                                            create=bool(body.get("create")))
+            self._json(200, {"error": err} if err else {"ok": True, **info})
+            return
+        if path == "/api/prompt":
+            body = self._read_json() or {}
+            # "reset" and an empty prompt mean the same thing to the store (drop
+            # the override) -- but only an explicit reset may clear it, or a
+            # cleared textarea would silently wipe a saved prompt on Save.
+            text = "" if body.get("reset") else (body.get("prompt") or "")
+            if not body.get("reset") and not text.strip():
+                self._json(200, {"error": "The prompt cannot be empty. Use "
+                                          "Restore built-in default instead."})
+                return
+            custom, err = save_summary_system(text)
+            self._json(200, {"error": err} if err else
+                       {"ok": True, "custom": custom,
+                        "prompt": load_summary_system()})
             return
         if path == "/api/practice_clear":
             body = self._read_json() or {}

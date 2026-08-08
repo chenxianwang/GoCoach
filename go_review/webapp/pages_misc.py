@@ -6,10 +6,16 @@ from urllib.parse import quote
 import go_terms        # noqa: E402
 
 from .listing import list_reports
-from .assets import SUMMARY_CSS, SUMMARY_JS, TERMS_CSS, TERMS_JS
+from .assets import (PROMPT_CSS, PROMPT_JS, SUMMARY_CSS, SUMMARY_JS,
+                     TERMS_CSS, TERMS_JS)
 from .shell import _page
 from .htmlutil import _esc
-from .summary_engine import _md_to_html, load_summary, summary_history_html
+from .config_jobs import _safe_cfg
+from .state import load_notes
+from .summary_engine import (DEFAULT_SUMMARY_SYSTEM, _md_to_html, _summary_input,
+                             load_summary, load_summary_system,
+                             summary_history_html, summary_system_is_custom,
+                             system_prompt_path)
 
 
 def summary_page(rel=None, embed=False):
@@ -48,6 +54,80 @@ def summary_page(rel=None, embed=False):
         "</section>"
         "</main>" + SUMMARY_JS)
     return _page("Review summary &middot; Mirror of Go", body, SUMMARY_CSS)
+
+
+# ---------------------------------------------------------------------------
+# Review prompt setting (/prompt) — see and edit what DeepSeek is actually told
+# ---------------------------------------------------------------------------
+
+def prompt_page(rel=None, embed=False):
+    """The system prompt, editable, next to the data half it gets sent with.
+
+    Two halves go to DeepSeek and only one of them is a setting. The system
+    prompt is fixed text and is what you tune; the user message is assembled
+    from the chosen report every time it runs, so it is shown read-only. Editing
+    the first without seeing the second is guesswork, which is why both are here.
+    """
+    reps = list_reports()
+    if not rel and reps:
+        rel = reps[0]["rel"]
+    opts = "".join(
+        f"<option value='{_esc(r['rel'])}'{' selected' if r['rel'] == rel else ''}>"
+        f"{_esc(r['label'])}</option>" for r in reps)
+
+    current = load_summary_system()
+    custom = summary_system_is_custom()
+    badge = ("<span class='pstate custom' id='pBadge'>Customised</span>" if custom
+             else "<span class='pstate def' id='pBadge'>Using the built-in "
+                  "default</span>")
+
+    try:
+        preview = _summary_input(rel, load_notes(rel)) if rel else ""
+    except Exception as e:  # noqa: BLE001
+        # The preview reads and aggregates the whole report; a half-imported
+        # folder should grey out one panel, not take the editor down with it.
+        preview = f"(could not build the preview for this report: {e})"
+
+    cfg = _safe_cfg()
+    model = cfg.get("deepseek_model") or "deepseek-chat"
+    head = ("" if embed else
+            "<div class='hero'><a class='back' href='/'>&larr; Back to dashboard</a>"
+            "<h1>Review prompt setting</h1>"
+            "<p class='sub'>What DeepSeek is told before it reads your notes.</p></div>")
+    body = (
+        head + "<main>"
+        "<section class='card'>"
+        f"<div class='card-h'><h2>System prompt</h2>{badge}</div>"
+        "<p class='hint'>These are the standing instructions sent with every "
+        "<b>Generate / refresh review summary</b>. Edit them to change how the "
+        "diagnosis is written &mdash; ask for shorter output, a different set of "
+        "sections, harsher grading, or Chinese instead of English. Saving affects "
+        "the <b>next</b> summary you generate; the ones already on disk are not "
+        "rewritten.</p>"
+        f"<textarea class='pta' id='pTa' spellcheck='false'>{_esc(current)}</textarea>"
+        "<div class='pbar'>"
+        "<button class='pbtn' id='pSave'>Save prompt</button>"
+        "<button class='pbtn ghost' id='pReset'>Restore built-in default</button>"
+        "<span id='pStat' class='pnote'></span><span class='grow'></span>"
+        "</div>"
+        f"<p class='pmeta' style='margin-top:12px'>Saved to "
+        f"<code>{_esc(system_prompt_path())}</code> &middot; sent to model "
+        f"<code>{_esc(model)}</code>. Delete that file, or press restore, to go "
+        f"back to the shipped prompt.</p>"
+        "</section>"
+        "<section class='card'>"
+        "<div class='card-h'><h2>The data it is sent with</h2></div>"
+        "<p class='hint'>The second half of every request, rebuilt from the report "
+        "each time &mdash; your spoken review notes plus the aggregate stats. It is "
+        "generated, not a setting, so it is read-only here; this is exactly what "
+        "the model sees.</p>"
+        f"<div class='cmpbar' style='margin-bottom:12px'>Report "
+        f"<select id='pRep' class='cmpsel'>{opts}</select></div>"
+        f"<pre class='ppre'>{_esc(preview)}</pre>"
+        "</section>"
+        f"<pre id='pDefault' hidden>{_esc(DEFAULT_SUMMARY_SYSTEM)}</pre>"
+        "</main>" + PROMPT_JS)
+    return _page("Review prompt setting &middot; Mirror of Go", body, PROMPT_CSS)
 
 
 # ---------------------------------------------------------------------------

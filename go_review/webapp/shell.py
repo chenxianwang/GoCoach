@@ -70,6 +70,7 @@ def dashboard_page():
         "<button class='newbtn2' id='btn-summary'>&#128211; Review summary &middot; diagnostic profile</button>"
         "<button class='newbtn2' id='btn-tsumego'>&#129504; Skill Test &middot; 101weiqi diagnostics</button>"
         "<button class='newbtn2' id='btn-terms'>&#128214; Go terms &middot; Chinese to English</button>"
+        "<button class='newbtn2' id='btn-prompt'>&#9881;&#65039; Review prompt setting</button>"
         "<div class='lh' id='lh'>Analysed reports</div>"
         "<div class='list' id='replist'></div>"
         "</aside>"

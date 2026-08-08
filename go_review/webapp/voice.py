@@ -60,6 +60,106 @@ def voice_audio_dir():
     return os.path.expanduser(raw) if raw else ""
 
 
+# ---------------------------------------------------------------------------
+# Choosing where recordings are kept.
+#
+# A web page cannot hand a *server* a folder the user picked natively:
+# `showDirectoryPicker()` returns a handle only the browser can write through,
+# and `<input webkitdirectory>` returns file names, not a location. Python is
+# what writes the .webm, so the picker has to run server-side -- these two
+# functions are it, and the panel in report/assets.py is their front end.
+# ---------------------------------------------------------------------------
+
+def _tilde(path):
+    """Store `~/Desktop/...` rather than `/Users/me/Desktop/...` in config."""
+    home = os.path.expanduser("~")
+    if path == home:
+        return "~"
+    if path.startswith(home + os.sep):
+        return "~" + path[len(home):]
+    return path
+
+
+def _looks_like_a_take(entry_path):
+    """A recording folder is one with a .webm inside, English Coach style."""
+    try:
+        return any(n.lower().endswith((".webm", ".m4a", ".mp3", ".wav"))
+                   for n in os.listdir(entry_path))
+    except OSError:
+        return False
+
+
+def browse_dirs(path=None):
+    """One directory's subfolders, for the folder picker.
+
+    `path` empty means "start where recordings currently go", falling back to
+    the home directory when retention is switched off.
+    """
+    raw = (path or "").strip() or voice_audio_dir() or "~"
+    full = os.path.abspath(os.path.expanduser(raw))
+    out = {
+        "path": full,
+        "display": _tilde(full),
+        "parent": os.path.dirname(full) if os.path.dirname(full) != full else None,
+        "exists": os.path.isdir(full),
+        "writable": False,
+        "dirs": [],
+        "takes": 0,
+        "current": os.path.abspath(voice_audio_dir()) if voice_audio_dir() else "",
+        "error": None,
+    }
+    if not out["exists"]:
+        out["error"] = "That folder does not exist yet."
+        return out
+    out["writable"] = os.access(full, os.W_OK)
+    try:
+        names = sorted((n for n in os.listdir(full)
+                        if not n.startswith(".")
+                        and os.path.isdir(os.path.join(full, n))),
+                       key=str.lower)
+    except OSError as e:
+        out["error"] = f"Cannot read that folder: {e.strerror or e}"
+        return out
+    # Folders that are themselves recordings are shown as a count, not as places
+    # to descend into -- nesting a take inside a take would break the
+    # <stem>/<stem>.webm pairing the English Coach library reads.
+    plain = []
+    for n in names:
+        if _looks_like_a_take(os.path.join(full, n)):
+            out["takes"] += 1
+        else:
+            plain.append(n)
+    out["dirs"] = plain[:400]        # a huge folder must not stall the page
+    return out
+
+
+def set_voice_audio_dir(path, create=False):
+    """Point future recordings at `path`, creating it when asked. -> (info, error)."""
+    from .config_jobs import set_default_config
+
+    raw = (path or "").strip()
+    if not raw:
+        return None, "Give a folder path."
+    full = os.path.abspath(os.path.expanduser(raw))
+    if not os.path.isdir(full):
+        if not create:
+            return None, ("That folder does not exist. Use \"Create folder\" if "
+                          "you want it made.")
+        try:
+            os.makedirs(full, exist_ok=True)
+        except OSError as e:
+            return None, f"Could not create it: {e.strerror or e}"
+    if not os.path.isdir(full):
+        return None, "That path is not a folder."
+    if not os.access(full, os.W_OK):
+        return None, "That folder is not writable."
+    try:
+        set_default_config(voice_audio_dir=_tilde(full))
+    except Exception as e:  # noqa: BLE001
+        return None, f"Could not save the setting: {type(e).__name__}: {e}"
+    return browse_dirs(full), None
+
+
 def _audio_stem(rel):
     """`Recording <YYYYMMDD-HHMMSS> <report>` — the English Coach library keys a
     recording on its folder name ("stem") and names every file inside after it.

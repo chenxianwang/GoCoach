@@ -26,8 +26,48 @@ def _prompt_file(name):
         return ""
 
 
-def _summary_system():
-    return (
+#: Where an edited system prompt is stored. The built-in text below stays the
+#: default: the file is an *override*, so deleting it restores the shipped
+#: prompt and an edit is never silently lost to a code change.
+SYSTEM_PROMPT_FILE = "review_summary_system.md"
+
+
+def system_prompt_path():
+    return os.path.join(HERE, "prompts", SYSTEM_PROMPT_FILE)
+
+
+def load_summary_system():
+    """The system prompt in force: the saved override, else the built-in default."""
+    return _prompt_file(SYSTEM_PROMPT_FILE).strip() or DEFAULT_SUMMARY_SYSTEM
+
+
+def save_summary_system(text):
+    """Persist an edited prompt. Blank text deletes the override (back to default).
+
+    Returns (is_custom, error).
+    """
+    path = system_prompt_path()
+    text = (text or "").strip()
+    try:
+        if not text:
+            if os.path.exists(path):
+                os.remove(path)
+            return False, None
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(text + "\n")
+        os.replace(tmp, path)          # never leave a half-written prompt
+        return True, None
+    except OSError as e:
+        return os.path.exists(path), f"{type(e).__name__}: {e}"
+
+
+def summary_system_is_custom():
+    return bool(_prompt_file(SYSTEM_PROMPT_FILE).strip())
+
+
+DEFAULT_SUMMARY_SYSTEM = (
         "You are a Go review coach. You will be given the aggregate data for a "
         "batch of one player's games, plus that player's own review commentary "
         "(mostly a transcript of them talking out loud, so expect slips, repetition "
@@ -69,6 +109,10 @@ def _summary_system():
         "4. \"Training priorities\" -- ordered by what matters most, each with one "
         "concrete drill.\n"
         "Output the markdown only, with no pleasantries.")
+
+
+def _summary_system():
+    return load_summary_system()
 
 
 def _summary_path(rel):

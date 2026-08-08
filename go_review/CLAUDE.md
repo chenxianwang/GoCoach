@@ -75,7 +75,8 @@ new session — read it first.
   - `webapp/shell.py` — sidebar shell (`dashboard_page`), `analyze_page`,
     `_analysis_module_html`, `_page`.
   - `webapp/compare.py` — `compare_page`, `_report_metrics`.
-  - `webapp/pages_misc.py` — `summary_page`, `terms_page` (`/terms`).
+  - `webapp/pages_misc.py` — `summary_page`, `terms_page` (`/terms`),
+    `prompt_page` (`/prompt`, sidebar **Review prompt setting**).
   - `webapp/static_export.py` — `write_static_index` / `build_static_index` (the
     offline `index.html` viewer).
   - `webapp/report_serve.py` — `render_report` (`/r/<rel>`).
@@ -86,13 +87,28 @@ new session — read it first.
     matters if the reload logic ever needs to change again.
   - `webapp/board_api.py` — `render_board_svg` (`/api/board`, lazy full-board SVG).
   - `webapp/voice.py` — voice recording, local Whisper (`transcribe_audio`,
-    `_get_whisper`), the English Coach filing convention.
+    `_get_whisper`), the English Coach filing convention, and the **save-folder
+    picker** (`browse_dirs`, `set_voice_audio_dir`). The picker is server-side
+    on purpose: a page cannot hand the *server* a natively-chosen folder —
+    `showDirectoryPicker()` yields a browser-sandboxed handle and
+    `<input webkitdirectory>` yields file names, not a location — and Python is
+    what writes the `.webm`. `browse_dirs` hides sub-folders that are themselves
+    recordings (anything containing an audio file) and reports them as a count,
+    because nesting a take inside a take breaks the `<stem>/<stem>.{webm,txt}`
+    pairing English Coach reads.
   - `webapp/state.py` — per-report `notes.json` / `review_voice.md` /
     `practice_hidden.json` load/save.
   - `webapp/summary_engine.py` — DeepSeek call (`_call_deepseek`,
     `_summary_system`, `_summary_input`, `build_review_summary`), the summary
     archive (`archive_summary`, `list_summaries`, `summary_history_html`,
     `export_summaries_md`), markdown→HTML (`_md_to_html`).
+    The system prompt is **`DEFAULT_SUMMARY_SYSTEM` in code, overridable on
+    disk**: `load_summary_system()` returns `prompts/review_summary_system.md`
+    if it exists and is non-empty, else the built-in default, and
+    `_summary_system()` is now just a call to it. `save_summary_system(text)`
+    writes it atomically; **blank text deletes the file**, which is the reset.
+    Keeping the default in code means an edit is never lost to a code change
+    and deleting the file always restores shipped behaviour.
   - `webapp/backup.py` — `backup_manifest`, `build_backup_zip`, `delete_report`.
   - `webapp/tsumego_page.py` — the **101weiqi Skill Test** page (`/tsumego`,
     sidebar). The analysis itself lives in the sibling **`tsumego/` package at
@@ -138,6 +154,8 @@ new session — read it first.
 - `prompts/go_review_diagnostics_skill.md`, `prompts/worked_example.md` — the
   originally-uploaded skill. **No longer used for the summary** (it moved to a
   data-driven prompt), kept for reference.
+  `prompts/review_summary_system.md` — written only when you edit the prompt on
+  the **Review prompt setting** page; absent means "use the built-in default".
 - `tests/test_parsing.py`, `demo/`, `README.md`, `LICENSE`, `.gitignore`.
 
 ## Reports & per-report data
@@ -219,6 +237,11 @@ that plus which config keys to refill.
   `go_review_mastered`); delete → `practice_hidden.json`. Header has the **batch
   voice-record panel** (🎤 Start voice review → MediaRecorder → POST
   `/api/transcribe` → appended to `review_voice.md`; floating "Recording" pill).
+  Next to the timer, **📁 Save to:** opens a folder picker (`GET/POST
+  /api/voice_dir`) for choosing or creating the folder recordings go into; it
+  writes `voice_audio_dir` via `set_default_config`, so config secrets are
+  preserved verbatim and no restart is needed. Nothing changes until **Save
+  here** — browsing is just browsing.
   **Delete all blunder positions** (on the count line under the filters) and
   **Restore N deleted** call `/api/practice_clear`, which rewrites
   `practice_hidden.json` and rebuilds. When nothing is left to show,
@@ -230,6 +253,16 @@ that plus which config keys to refill.
   worst-moves table) into a **data-driven, concise** diagnosis. Categories **emerge from
   the notes** (the model names them itself — no fixed taxonomy). **No batch / cumulative /
   cross-batch / comparison framing** (removed per user). Cached to `review_summary.md`.
+- **Review prompt setting** (`prompt_page`, `/prompt`, sidebar): the system prompt
+  in an editable textarea with **Save prompt** / **Restore built-in default**, a
+  badge showing whether it is customised, and unsaved-changes tracking (plus a
+  `beforeunload` guard). `POST /api/prompt` takes `{prompt}` or `{reset:true}`;
+  **an empty `prompt` is rejected** — only an explicit reset may clear the
+  override, or a cleared textarea would silently wipe a saved prompt on Save.
+  `GET /api/prompt` returns `{prompt, custom}`. A second read-only panel shows
+  `_summary_input(rel)` for a chosen report — the *data* half of the request,
+  which is regenerated per run and therefore not a setting. Saving affects the
+  next generation only; summaries already on disk are untouched.
 - **Go terms** (`terms_page`, `/terms`, sidebar): Chinese→English Go glossary,
   one card per category, columns English (with a pronunciation respelling for the
   Japanese loanwords) / Chinese (with pinyin) / meaning. Live search over English +
@@ -298,6 +331,10 @@ that plus which config keys to refill.
   validate it: extract every `<script>` body from the built reports and run
   `node --check` over them. That catches exactly this class of bug, which no Python
   test would.
+- **A class selector's `display` beats `[hidden]`.** `.vcpick{display:flex}`
+  overrode the UA sheet's `[hidden]{display:none}`, so the folder picker sat
+  open on page load. Any panel styled with a `display` on its class needs an
+  explicit `.cls[hidden]{display:none}`.
 - **`BrokenPipeError` in the terminal is not a failure.** It means the browser tab
   went away before a slow reply arrived (the DeepSeek summary takes 20-60s). The work
   had already been done and saved by then. `Handler._send` guards the whole

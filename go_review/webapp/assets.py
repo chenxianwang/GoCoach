@@ -462,6 +462,8 @@ SHELL_JS = r"""
     if(bt) bt.classList.toggle('on', key==='__terms__');
     var bz=document.getElementById('btn-tsumego');
     if(bz) bz.classList.toggle('on', key==='__tsumego__');
+    var bp=document.getElementById('btn-prompt');
+    if(bp) bp.classList.toggle('on', key==='__prompt__');
     document.querySelectorAll('.repitem').forEach(function(el){
       el.classList.toggle('on', el.dataset.rel===key); });
   }
@@ -471,6 +473,8 @@ SHELL_JS = r"""
   function openTerms(){ frame.src='/terms?embed=1'; setActive('__terms__'); }
   function openTsumego(){ frame.src='/tsumego?embed=1&t='+Date.now();
     setActive('__tsumego__'); }
+  function openPrompt(){ frame.src='/prompt?embed=1&t='+Date.now();
+    setActive('__prompt__'); }
   function openReport(rel){ frame.src='/r/'+enc(rel)+'?embed=1&t='+Date.now();
     setActive(rel);
     if(window.matchMedia && window.matchMedia('(max-width:760px)').matches)
@@ -533,6 +537,7 @@ SHELL_JS = r"""
   var _bs=document.getElementById('btn-summary'); if(_bs) _bs.onclick=openSummary;
   var _bt=document.getElementById('btn-terms'); if(_bt) _bt.onclick=openTerms;
   var _bz=document.getElementById('btn-tsumego'); if(_bz) _bz.onclick=openTsumego;
+  var _bp=document.getElementById('btn-prompt'); if(_bp) _bp.onclick=openPrompt;
   loadReports().then(function(reps){
     if(reps.length) openReport(reps[0].rel); else openAnalyze();
   });
@@ -671,6 +676,95 @@ SUMMARY_JS = r"""
       stat.textContent='Updated \u2713 \u00b7 the previous one is kept below';
     }).catch(function(e){ gen.disabled=false; stat.textContent='Failed: '+e; });
   };
+})();
+</script>
+"""
+
+
+PROMPT_CSS = r"""
+.pstate{display:inline-flex;align-items:center;gap:6px;font-size:12px;
+  font-weight:700;border-radius:20px;padding:3px 11px;border:1px solid}
+.pstate.def{color:var(--ink-soft);background:var(--line-soft);
+  border-color:var(--line)}
+.pstate.custom{color:var(--amber-ink);background:var(--amber-soft);
+  border-color:var(--amber-line)}
+.pta{width:100%;min-height:420px;padding:14px 15px;border:1px solid var(--amber-line);
+  border-radius:10px;background:#fff;color:var(--ink);resize:vertical;
+  font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  white-space:pre-wrap;tab-size:2}
+.pta:focus{outline:none;border-color:var(--amber);
+  box-shadow:0 0 0 3px rgba(183,121,31,.13)}
+.pbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+.pbar .grow{flex:1}
+.pbtn{border:1px solid var(--amber);background:var(--amber);color:#fff;
+  border-radius:8px;padding:8px 15px;font-size:13px;font-weight:700;cursor:pointer}
+.pbtn:hover{filter:brightness(1.05)}
+.pbtn:disabled{opacity:.55;cursor:default}
+.pbtn.ghost{background:var(--card);color:var(--amber-ink);
+  border-color:var(--amber-line)}
+.pbtn.ghost:hover{background:var(--amber-soft)}
+.pnote{font-size:12.5px;color:var(--muted)}
+.pnote.warn{color:#b03030;font-weight:600}
+.pnote.ok{color:#2f7a3a;font-weight:600}
+.ppre{margin:0;padding:14px 15px;border:1px solid var(--line);border-radius:10px;
+  background:var(--line-soft);color:var(--ink-soft);max-height:460px;overflow:auto;
+  font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  white-space:pre-wrap;word-break:break-word}
+.pmeta{font-size:12.5px;color:var(--ink-soft);margin:0 0 10px}
+.pmeta code{background:var(--line-soft);border-radius:5px;padding:1px 6px;
+  font-size:12px}
+"""
+
+
+PROMPT_JS = r"""
+<script>
+(function(){
+  var ta=document.getElementById('pTa'), stat=document.getElementById('pStat');
+  var save=document.getElementById('pSave'), reset=document.getElementById('pReset');
+  var badge=document.getElementById('pBadge'), rep=document.getElementById('pRep');
+  var DEFAULT=document.getElementById('pDefault').textContent;
+  var saved=ta.value;
+
+  function say(msg, cls){ stat.className='pnote '+(cls||''); stat.textContent=msg||''; }
+  function dirty(){ return ta.value !== saved; }
+  function sync(){
+    save.disabled = !dirty();
+    if(dirty()) say('Unsaved changes.', 'warn'); else say('');
+  }
+  ta.addEventListener('input', sync);
+  sync();
+
+  function post(body, okMsg){
+    save.disabled=true; reset.disabled=true; say('Saving…');
+    return fetch('/api/prompt',{method:'POST',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        reset.disabled=false;
+        if(d.error){ say(d.error,'warn'); save.disabled=false; return; }
+        ta.value=d.prompt; saved=d.prompt;
+        badge.className='pstate '+(d.custom?'custom':'def');
+        badge.textContent=d.custom?'Customised':'Using the built-in default';
+        sync(); say(okMsg,'ok');
+      })
+      .catch(function(e){ reset.disabled=false; save.disabled=false;
+        say('Could not save: '+e,'warn'); });
+  }
+
+  save.onclick=function(){ post({prompt:ta.value}, 'Saved. The next summary uses it.'); };
+  reset.onclick=function(){
+    if(dirty() && !confirm('Discard your edits and restore the built-in prompt?')) return;
+    if(!dirty() && ta.value===DEFAULT){ say('Already the built-in default.'); return; }
+    post({reset:true}, 'Restored the built-in prompt.');
+  };
+  if(rep) rep.onchange=function(){
+    var u=new URL(window.location.href);
+    u.searchParams.set('report', rep.value);
+    window.location.href=u.toString();
+  };
+  window.addEventListener('beforeunload', function(e){
+    if(dirty()){ e.preventDefault(); e.returnValue=''; }
+  });
 })();
 </script>
 """

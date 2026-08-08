@@ -45,7 +45,29 @@ VOICE_PANEL = (
     "<button type='button' class='vcbtn' id='vcBtn' onclick='vcToggle()'>"
     "&#127908; Start voice review</button>"
     "<span class='vctimer' id='vcTimer'>00:00</span>"
-    "<span class='vcstat sub' id='vcStat'></span></div>"
+    "<span class='vcstat sub' id='vcStat'></span>"
+    "<button type='button' class='vcdir' id='vcDirBtn' onclick='vcDirOpen()' "
+    "title='Choose the folder your recordings are saved into'>"
+    "&#128193; Save to&hellip;</button></div>"
+    "<div class='vcpick' id='vcPick' hidden>"
+    "<div class='vcpickhd'>Save recordings to <span id='vcPickNow'></span></div>"
+    "<div class='vcrow'>"
+    "<input type='text' id='vcPickPath' class='vcpickin' spellcheck='false' "
+    "placeholder='~/Desktop/...'>"
+    "<button type='button' class='vcsave' onclick='vcDirGo()'>Open</button>"
+    "<button type='button' class='vcsave' onclick='vcDirUp()'>&#8593; Up</button>"
+    "</div>"
+    "<div class='vcpicklist' id='vcPickList'></div>"
+    "<div class='vcrow'>"
+    "<input type='text' id='vcPickNew' class='vcpickin' "
+    "placeholder='New folder name...'>"
+    "<button type='button' class='vcsave' onclick='vcDirCreate()'>"
+    "Create folder</button></div>"
+    "<div class='vcrow' style='margin-top:4px'>"
+    "<button type='button' class='vcbtn' id='vcPickUse' onclick='vcDirUse()'>"
+    "Save here</button>"
+    "<button type='button' class='vcsave' onclick='vcDirClose()'>Cancel</button>"
+    "<span class='vcstat sub' id='vcPickStat'></span></div></div>"
     "<p class='sub vchint'>One recording can cover many moves: scroll through the "
     "blunders below and talk through your thinking, your blind spots and what you "
     "learned. Hit <b>Stop &amp; transcribe</b> at the end and the whole take is turned "
@@ -75,6 +97,9 @@ VOICE_JS = r"""
   var HKEY='ymhidden:'+(REL||location.pathname);
   var VKEY='ymvoice:'+(REL||location.pathname);
   function el(id){ return document.getElementById(id); }
+  // Folder names come off the user's disk and go straight into innerHTML.
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
   // ---- delete a blunder from the practice set (persists; shrinks on rebuild) ----
   function hideCard(nid){ document.querySelectorAll('.diag').forEach(function(d){
@@ -162,6 +187,98 @@ VOICE_JS = r"""
       .catch(function(e){ cb&&cb(false,''+e); });
     } else { try{ localStorage.setItem(VKEY,text); cb&&cb(true); }catch(e){ cb&&cb(false,''+e); } }
   }
+  // ---- where recordings are saved -------------------------------------------
+  // A browser cannot give the *server* a natively-picked folder, and the server
+  // is what writes the .webm -- so the listing comes from /api/voice_dir and
+  // this walks it. `_pickAt` is the folder being looked at, which is not yet the
+  // folder in use: nothing changes until "Save here".
+  var _pickAt=null;
+  function pickStat(msg, bad){
+    var s=el('vcPickStat'); if(!s) return;
+    s.textContent=msg||''; s.style.color=bad?'#b03030':'';
+  }
+  function pickLabel(dir){
+    var b=el('vcDirBtn'); if(!b) return;
+    var name=(dir||'').replace(/\/+$/,'').split('/').pop();
+    b.innerHTML='📁 Save to: '+esc(name||'not kept');
+    b.title=dir?('Recordings are saved into '+dir):'Recordings are not being kept';
+  }
+  function pickRender(d){
+    _pickAt=d.path;
+    el('vcPickPath').value=d.display||d.path||'';
+    var now=el('vcPickNow');
+    if(now) now.textContent=d.current?('· currently '+d.current):'· not kept';
+    var box=el('vcPickList'), h='';
+    if(d.error){ h='<div class="none">'+esc(d.error)+'</div>'; }
+    else {
+      (d.dirs||[]).forEach(function(n){
+        h+='<button type="button" data-n="'+esc(n)+'">📁 '+esc(n)+'</button>';
+      });
+      if(!h){
+        h='<div class="none">No sub-folders here'
+          +(d.takes?(' · '+d.takes+' recording'+(d.takes===1?'':'s')+' already in this folder'):'')
+          +'.</div>';
+      } else if(d.takes){
+        h+='<div class="none">'+d.takes+' recording'+(d.takes===1?'':'s')
+          +' already in this folder (not listed — a take must not go inside a take).</div>';
+      }
+    }
+    box.innerHTML=h;
+    box.querySelectorAll('button').forEach(function(b){
+      b.onclick=function(){ pickLoad(_pickAt.replace(/\/+$/,'')+'/'+b.dataset.n); };
+    });
+    el('vcPickUse').disabled=!(d.exists && d.writable);
+    if(d.exists && !d.writable) pickStat('That folder is not writable.', true);
+  }
+  function pickLoad(path){
+    pickStat('Reading…');
+    return fetch('/api/voice_dir?path='+encodeURIComponent(path||''))
+      .then(function(r){ return r.json(); })
+      .then(function(d){ pickRender(d); pickStat(d.error||'', !!d.error); return d; })
+      .catch(function(e){ pickStat('Could not read that folder: '+e, true); });
+  }
+  window.vcDirOpen=function(){
+    var p=el('vcPick');
+    if(!server){ alert('Choosing the folder needs the app running (start the local server first).'); return; }
+    if(!p.hidden){ p.hidden=true; return; }
+    p.hidden=false; pickStat(''); pickLoad('');
+  };
+  window.vcDirClose=function(){ el('vcPick').hidden=true; pickStat(''); };
+  window.vcDirGo=function(){ pickLoad(el('vcPickPath').value); };
+  window.vcDirUp=function(){
+    var at=(_pickAt||'').replace(/\/+$/,'');
+    var up=at.slice(0, at.lastIndexOf('/'))||'/';
+    pickLoad(up);
+  };
+  window.vcDirCreate=function(){
+    var name=(el('vcPickNew').value||'').trim();
+    if(!name){ pickStat('Type a name for the new folder first.', true); return; }
+    if(name.indexOf('/')>=0){ pickStat('A folder name cannot contain "/".', true); return; }
+    pickSet((_pickAt||'').replace(/\/+$/,'')+'/'+name, true, 'Created and now saving here.');
+  };
+  window.vcDirUse=function(){
+    pickSet(el('vcPickPath').value||_pickAt, false, 'Saving here from now on.');
+  };
+  function pickSet(path, create, okMsg){
+    pickStat('Saving…');
+    fetch('/api/voice_dir',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({path:path, create:!!create})})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d.error){ pickStat(d.error, true); return; }
+        el('vcPickNew').value='';
+        pickRender(d); pickLabel(d.path); pickStat(okMsg);
+      })
+      .catch(function(e){ pickStat('Could not save: '+e, true); });
+  }
+  if(server && el('vcDirBtn')){
+    // Label the button with the folder actually in force, so the panel tells the
+    // truth before it is ever opened.
+    fetch('/api/voice_dir').then(function(r){ return r.json(); })
+      .then(function(d){ pickLabel(d.current); }).catch(function(){});
+  }
+
   window.vcSave=function(){ var st=el('vcStat'); st.textContent='Saving...';
     saveVoice(el('vcText').value, function(ok,err){
       st.textContent=ok?'Saved \u2713':'Save failed: '+(err||''); }); };
@@ -821,6 +938,32 @@ th{color:#718096;font-weight:600}
 .vctimer{font-variant-numeric:tabular-nums;font-weight:700;color:var(--espresso);
  font-size:14px}
 .vcstat{font-size:12.5px}
+/* folder picker: the browser cannot hand the server a natively-chosen folder,
+   so the listing comes from /api/voice_dir and this is its front end */
+.vcdir{margin-left:auto;border:1px solid var(--amber-line);background:#fff;
+ color:var(--amber-ink);border-radius:9px;padding:8px 13px;font-size:12.5px;
+ font-weight:700;cursor:pointer;max-width:100%;overflow:hidden;
+ text-overflow:ellipsis;white-space:nowrap}
+.vcdir:hover{background:#efe0bf}
+.vcpick{margin:10px 0 4px;padding:12px 13px;border:1px solid var(--amber-line);
+ background:#fff;border-radius:10px;display:flex;flex-direction:column;gap:8px}
+/* `display:flex` on a class beats the UA sheet's [hidden]{display:none}, so the
+   panel would sit open on load. Restore it explicitly. */
+.vcpick[hidden]{display:none}
+.vcpickhd{font-size:12.5px;font-weight:700;color:var(--espresso)}
+.vcpickhd span{font-weight:500;color:var(--ink-soft)}
+.vcpickin{flex:1;min-width:180px;padding:7px 10px;border:1px solid var(--amber-line);
+ border-radius:8px;font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
+ background:#fffdf9;color:var(--ink)}
+.vcpickin:focus{outline:none;border-color:var(--amber)}
+.vcpicklist{max-height:190px;overflow:auto;border:1px solid var(--line);
+ border-radius:8px;background:#fffdf9}
+.vcpicklist button{display:block;width:100%;text-align:left;border:0;
+ background:none;padding:6px 11px;font:12.5px/1.5 inherit;color:var(--ink);
+ cursor:pointer;border-bottom:1px solid var(--line-soft)}
+.vcpicklist button:last-child{border-bottom:0}
+.vcpicklist button:hover{background:var(--amber-soft);color:var(--amber-ink)}
+.vcpicklist .none{padding:8px 11px;font-size:12.5px;color:var(--muted)}
 /* transcription heartbeat: real progress through the audio, not a spinner */
 .vcbar{display:none;height:6px;border-radius:999px;background:#eadfc6;
  overflow:hidden;margin:0 0 8px}
