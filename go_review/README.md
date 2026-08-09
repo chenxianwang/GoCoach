@@ -44,6 +44,19 @@ When it finishes, open:
 | `deepseek_api_key` | DeepSeek API key for the **Review summary** page. Kept local (in gitignored `config.json`); leave blank to disable. |
 | `deepseek_base_url` / `deepseek_model` | default `https://api.deepseek.com` / `deepseek-v4-flash`. Must be `deepseek-v4-pro` or `deepseek-v4-flash`. |
 
+### Filtering the Blunder Set
+
+The rows above the cards narrow the set down: **Phase**, **Type**, **Points lost**,
+**Win-rate drop**, **Status** (to review / mastered) and **Opponent**. They combine,
+so "middlegame misreads of 10+ points against one player" is three clicks.
+
+**Opponent is the one row you can pick several of** — click as many names as you
+like and they add up, which is what you want when several of them play the same
+way. Clicking **All** clears the selection, and so does turning off the last name
+you had chosen. Opponents are listed worst-first, with the number of blunders
+against each. A report with only one opponent gets no row, since there would be
+nothing to choose.
+
 ### Voice review & the review summary
 
 At the top of the **Blunder Set** press **🎤 Start voice review** and just talk while

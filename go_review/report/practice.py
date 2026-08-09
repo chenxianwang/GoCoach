@@ -98,6 +98,18 @@ def practice_section(games, hidden=None, cleared=False):
     phase_count = {ph: sum(1 for e in built if e["phase"] == ph)
                    for ph in phases}
 
+    # Opponents, worst first.  Their names come from the SGF, so they are
+    # arbitrary text (usually a Chinese nickname) and are slugged rather than
+    # used raw: `recount` finds the counters with `i[data-co="<value>"]`, and a
+    # nickname containing a quote or bracket would break that selector.  Same
+    # reason `cat_slug` exists.
+    opp_count = {}
+    for e in built:
+        e["opp"] = (e["g"].get("opponent") or "").strip() or "(unknown)"
+        opp_count[e["opp"]] = opp_count.get(e["opp"], 0) + 1
+    opps = sorted(opp_count, key=lambda n: (-opp_count[n], n.lower()))
+    opp_slug = {n: f"o{i}" for i, n in enumerate(opps)}
+
     # Navigator (clickable folders): phase row + position-type row.
     nav = ["<div class='navbar'>"]
     nav.append("<div class='navrow'><span class='navlbl'>Phase</span>")
@@ -131,6 +143,23 @@ def practice_section(games, hidden=None, cleared=False):
                "<i id='cnt-todo'>0</i></button>"
                "<button class='navbtn' data-fst='done'>Mastered "
                "<i id='cnt-done'>0</i></button></div>")
+    # One opponent means there is nothing to choose between, so the row is only
+    # worth its space when there are several.  Unlike every row above it this
+    # one is multi-select: reviewing two or three opponents together is the
+    # normal case, and picking them one at a time would defeat the point.
+    if len(opps) > 1:
+        nav.append("<div class='navrow'><span class='navlbl' "
+                   "title='Pick as many as you like -- they combine'>"
+                   "Opponent</span>")
+        nav.append("<button class='navbtn on' data-fo='all' "
+                   "title='Every opponent'>All "
+                   f"<i data-co='all'>{len(built)}</i></button>")
+        for n in opps:
+            nav.append(f"<button class='navbtn' data-fo='{opp_slug[n]}' "
+                       f"title='Blunders from your games against {esc(n)}"
+                       f" -- click more than one to combine them'>{esc(n)} "
+                       f"<i data-co='{opp_slug[n]}'>{opp_count[n]}</i></button>")
+        nav.append("</div>")
     nav.append("</div>")
 
     # Cards.
@@ -205,6 +234,7 @@ def practice_section(games, hidden=None, cleared=False):
             f"data-date='{_gd}' "
             f"data-phase='{e['phase']}' "
             f"data-cat='{cat_slug[e['name']]}' "
+            f"data-opp='{opp_slug[e['opp']]}' "
             f"data-pts='{m.get('points_lost', 0)}' data-wr='{wr:.1f}' "
             f"data-est='{1 if has_est else 0}' data-estline=\"{est}\" "
             f"data-played=\"{esc(m.get('played') or '')}\" "
@@ -223,7 +253,7 @@ def practice_section(games, hidden=None, cleared=False):
             f"&minus;15%; {total_blunders} in total, matching the Overview blunder count)"
             + (f"; {n_deleted} mastered ones have been deleted, leaving {len(items)} in the practice set" if n_deleted else "")
             + ", cropped down to the local shape for practice -- filter by phase, type, "
-            "points lost and more. "
+            "points lost, win-rate drop, status and opponent. "
             "<span style='color:#e02424'>&#9632; The red square</span> = the move you "
             "actually played; <b>the numbered stones</b> are KataGo's recommended "
             "variation (<span style='color:#1f9d55'>&#9679; number 1 = its move</span>). "

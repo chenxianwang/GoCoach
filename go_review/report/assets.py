@@ -364,6 +364,9 @@ PRACTICE_JS = """
 <script>
 (function(){
   var fp='all', fc='all', fpts=0, fwr=0, fst='all';
+  // Opponent is the one multi-select filter: null means "every opponent",
+  // otherwise it is a Set of the chosen slugs.
+  var fo=null;
 
   // Mastered positions persist in the browser, keyed by game+move so the state
   // survives regenerating the report.
@@ -389,18 +392,22 @@ PRACTICE_JS = """
   function setI(attr,val,n){
     var el=document.querySelector('i['+attr+'="'+val+'"]'); if(el) el.textContent=n; }
   function recount(){
-    var byPhase={}, byCat={}, total=0, todo=0, done=0;
+    var byPhase={}, byCat={}, byOpp={}, total=0, todo=0, done=0;
     document.querySelectorAll('.diag').forEach(function(d){
       total++;
       var ph=d.getAttribute('data-phase'); byPhase[ph]=(byPhase[ph]||0)+1;
       var cat=d.getAttribute('data-cat'); byCat[cat]=(byCat[cat]||0)+1;
+      var op=d.getAttribute('data-opp'); byOpp[op]=(byOpp[op]||0)+1;
       if(mastered.has(d.getAttribute('data-key'))) done++; else todo++;
     });
     setI('data-cp','all',total); setI('data-cc','all',total);
+    setI('data-co','all',total);
     document.querySelectorAll('i[data-cp]').forEach(function(el){
       var v=el.getAttribute('data-cp'); if(v!=='all') el.textContent=byPhase[v]||0; });
     document.querySelectorAll('i[data-cc]').forEach(function(el){
       var v=el.getAttribute('data-cc'); if(v!=='all') el.textContent=byCat[v]||0; });
+    document.querySelectorAll('i[data-co]').forEach(function(el){
+      var v=el.getAttribute('data-co'); if(v!=='all') el.textContent=byOpp[v]||0; });
     var ct=document.getElementById('cnt-todo'); if(ct) ct.textContent=todo;
     var cd=document.getElementById('cnt-done'); if(cd) cd.textContent=done;
   }
@@ -423,8 +430,9 @@ PRACTICE_JS = """
       var okwr = parseFloat(d.getAttribute('data-wr')) >= fwr;
       var done = mastered.has(d.getAttribute('data-key'));
       var okst = fst==='all' || (fst==='done'?done:!done);
+      var oko = !fo || fo.has(d.getAttribute('data-opp'));
       var okdt = (window.GR ? GR.inRange(d.getAttribute('data-date')) : true);
-      var vis = okp && okc && okpts && okwr && okst && okdt;
+      var vis = okp && okc && okpts && okwr && okst && oko && okdt;
       d.style.display = vis ? '' : 'none';
       if(vis){ shown++; gms[(d.getAttribute('data-key')||'').split('#')[0]]=1; }
     });
@@ -447,6 +455,34 @@ PRACTICE_JS = """
   wire('data-fpts', function(v){ fpts=parseFloat(v); });
   wire('data-fwr', function(v){ fwr=parseFloat(v); });
   wire('data-fst', function(v){ fst=v; });
+
+  // Opponent does not go through wire(): that helper is "pick exactly one", and
+  // these accumulate. "All" is not one of the values, it is the reset.
+  (function wireOpp(){
+    var btns=document.querySelectorAll('.navbtn[data-fo]');
+    if(!btns.length) return;                 // single-opponent report: no row
+    function paint(){
+      btns.forEach(function(b){
+        var v=b.getAttribute('data-fo');
+        b.classList.toggle('on', v==='all' ? !fo : !!(fo && fo.has(v)));
+      });
+    }
+    btns.forEach(function(b){
+      b.addEventListener('click', function(){
+        var v=b.getAttribute('data-fo');
+        if(v==='all'){ fo=null; }
+        else{
+          if(!fo) fo=new Set();
+          if(fo.has(v)) fo.delete(v); else fo.add(v);
+          // Turning the last one off would leave every card hidden, which is
+          // never what the click meant -- it meant "stop filtering".
+          if(!fo.size) fo=null;
+        }
+        paint();
+        apply();
+      });
+    });
+  })();
 
   document.querySelectorAll('.diag').forEach(refreshCard);
   recount();
@@ -701,8 +737,11 @@ PRACTICE_JS = """
     if(!ids.length) return;
     var k=parseInt(btn.getAttribute('data-i')||'0',10) % ids.length;
     btn.setAttribute('data-i', k+1);
+    // Opponent is in this list for the same reason as the rest: the similar
+    // position is usually from a different game, so leaving an opponent
+    // selected would scroll to a card that is still hidden.
     ["[data-fp='all']","[data-fc='all']","[data-fpts='0']","[data-fwr='0']",
-     "[data-fst='all']"]
+     "[data-fst='all']","[data-fo='all']"]
       .forEach(function(sel){
         var b=document.querySelector('.navbtn'+sel); if(b) b.click();
       });
@@ -875,7 +914,9 @@ th{color:#718096;font-weight:600}
 .dsub{font-size:11px;color:#718096;text-align:left;margin-top:6px}
 .navbar{margin:10px 0 16px}
 .navrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:6px 0}
-.navlbl{font-size:12px;font-weight:700;color:#718096;width:46px;flex:none}
+/* Wide enough for the longest single word used as a row label ("Opponent",
+   "Blunders"); at 46px those overflowed into the first button. */
+.navlbl{font-size:12px;font-weight:700;color:#718096;width:64px;flex:none}
 .navbtn{font:inherit;font-size:12px;cursor:pointer;border:1px solid var(--line);
  background:var(--card);color:var(--ink);border-radius:14px;padding:4px 11px}
 .navbtn:hover{background:var(--amber-soft);border-color:var(--amber-line)}

@@ -233,7 +233,7 @@ that plus which config keys to refill.
 
 - **Blunder Set** (`practice_section`): every blunder as a card with a local-shape
   board image + lazy full-board zoom (`/api/board`); filters Phase / Type / Points
-  lost / Win-rate drop / Status; mark-mastered (localStorage, key
+  lost / Win-rate drop / Status / **Opponent**; mark-mastered (localStorage, key
   `go_review_mastered`); delete → `practice_hidden.json`. Header has the **batch
   voice-record panel** (🎤 Start voice review → MediaRecorder → POST
   `/api/transcribe` → appended to `review_voice.md`; floating "Recording" pill).
@@ -242,6 +242,15 @@ that plus which config keys to refill.
   writes `voice_audio_dir` via `set_default_config`, so config secrets are
   preserved verbatim and no restart is needed. Nothing changes until **Save
   here** — browsing is just browsing.
+  The **Opponent** row is the only **multi-select** filter (`fo` is `null` or a
+  `Set` of slugs, wired by `wireOpp`, not by the single-select `wire` helper);
+  "All" is its reset, and turning the last opponent off falls back to All rather
+  than hiding every card. Names are **slugged** (`o0`, `o1`, …) like `cat_slug`,
+  because `recount` looks the counters up with `i[data-co="<value>"]` and a
+  nickname containing a quote or bracket would break that selector. The row is
+  suppressed entirely when a report has only one opponent. **`goSim` must reset
+  it** along with the other filters — the similar position is usually from a
+  different game, so otherwise "Same move missed →" scrolls to a hidden card.
   **Delete all blunder positions** (on the count line under the filters) and
   **Restore N deleted** call `/api/practice_clear`, which rewrites
   `practice_hidden.json` and rebuilds. When nothing is left to show,
