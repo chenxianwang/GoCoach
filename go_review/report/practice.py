@@ -3,7 +3,7 @@
 from .constants import PHASE_LABEL, PTS_BLUNDER, WR_BLUNDER
 from .assets import BOARD_MODAL, FLOAT_REC, PRACTICE_CLEAR_JS, PRACTICE_JS, VOICE_JS, VOICE_PANEL
 from .charts import game_wr_chart
-from .data import esc, parse_date
+from .data import date_key, esc, parse_date
 from .board import _similarity_matrix, board_before, classify_blunder, diagram_svg, local_pattern, territory_split
 
 
@@ -25,7 +25,14 @@ def practice_section(games, hidden=None, cleared=False):
                 if key in hidden or cleared:
                     continue
                 items.append((g, m))
-    items.sort(key=lambda t: t[1].get("points_lost", 0), reverse=True)
+    # In move order, not worst-first: reading the cards in the order the mistakes
+    # happened lets you follow the game, and it lines them up left-to-right with
+    # the win-rate curve shown above them once the filters leave one game.
+    # Games are chronological so the grouping is stable; filename breaks a tie
+    # between two games played on the same day.  "Show me the worst" is still one
+    # click away on the Points lost row.
+    items.sort(key=lambda t: (date_key(t[0]), t[0].get("filename", ""),
+                              t[1].get("move_number") or 0))
     n_deleted = total_blunders - len(items)
 
     restore_btn = (
@@ -88,12 +95,15 @@ def practice_section(games, hidden=None, cleared=False):
         e["sim_best"] = sims[0][0] if sims else 0.0
 
     # Categories (position classifications) and phases present, with counts.
-    cats = []
+    # Commonest first.  These used to fall out in first-appearance order, which
+    # meant something only while the cards were sorted worst-first; now that they
+    # are in move order that would put whichever type you happened to misplay on
+    # move 12 at the head of the row.
+    cat_count = {}
     for e in built:
-        if e["name"] not in cats:
-            cats.append(e["name"])
+        cat_count[e["name"]] = cat_count.get(e["name"], 0) + 1
+    cats = sorted(cat_count, key=lambda c: (-cat_count[c], c.lower()))
     cat_slug = {c: f"c{i}" for i, c in enumerate(cats)}
-    cat_count = {c: sum(1 for e in built if e["name"] == c) for c in cats}
     phases = [ph for ph in ("opening", "middlegame", "endgame")
               if any(e["phase"] == ph for e in built)]
     phase_count = {ph: sum(1 for e in built if e["phase"] == ph)

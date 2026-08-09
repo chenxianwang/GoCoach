@@ -231,9 +231,13 @@ that plus which config keys to refill.
 
 ## Feature map
 
-- **Blunder Set** (`practice_section`): every blunder as a card with a local-shape
-  board image + lazy full-board zoom (`/api/board`); filters Phase / Type / Points
-  lost / Win-rate drop / Status / **Opponent**; mark-mastered (localStorage, key
+- **Blunder Set** (`practice_section`): every blunder as a card, **sorted by game
+  (chronological) then move number** — not worst-first, which is what it used to
+  be; the cards then read in game order and line up left-to-right with the
+  win-rate curve. Type chips are sorted commonest-first for the same reason
+  (first-appearance order only meant something under the old sort). Card image is
+  the local shape + lazy full-board zoom (`/api/board`); filters Phase / Type /
+  Points lost / Win-rate drop / Status / **Opponent**; mark-mastered (localStorage, key
   `go_review_mastered`); delete → `practice_hidden.json`. Header has the **batch
   voice-record panel** (🎤 Start voice review → MediaRecorder → POST
   `/api/transcribe` → appended to `review_voice.md`; floating "Recording" pill).

@@ -46,6 +46,11 @@ When it finishes, open:
 
 ### Filtering the Blunder Set
 
+Cards are in **move order**, grouped by game with the oldest game first, so you can
+read them the way the game happened and they line up with the win-rate curve below.
+(They used to be biggest-blunder-first; the **Points lost** row still gets you that
+in one click.)
+
 The rows above the cards narrow the set down: **Phase**, **Type**, **Points lost**,
 **Win-rate drop**, **Status** (to review / mastered) and **Opponent**. They combine,
 so "middlegame misreads of 10+ points against one player" is three clicks.
