@@ -52,11 +52,59 @@ Edit [`apps.json`](apps.json) and reload the page — no restart needed.
 | `cwd` | Where to run it. `~` is expanded. Defaults to your home directory. |
 | `probe` | How to tell it is running: `{"type":"port","port":N}` or `{"type":"process","match":"substring"}`. |
 | `url` | Optional. Shows an **Open** button while the app is up. |
+| `type` | `"action"` for a one-shot command instead of an app — see below. |
 
 `cwd` matters more than it looks: LizzieYZY reads `config.txt` and `persist`
 from its working directory, so pointing it somewhere else silently gives it a
 different engine setup. The entry is set to `~`, matching what you get running
 the command from a fresh Terminal.
+
+## Actions: buttons for commands, not apps
+
+Some things you want a button for are not apps. They run once, finish, and have
+no “is it up?” to answer — restarting a service, clearing a cache, kicking a
+tunnel. Mark those `"type": "action"`:
+
+```json
+{
+  "id": "kick-tunnel",
+  "name": "Kick Cloudflare Tunnel",
+  "emoji": "🌩️",
+  "type": "action",
+  "note": "Force cloudflared to reconnect now instead of waiting out its backoff.",
+  "command": "osascript -e 'do shell script \"launchctl kickstart -k system/com.cloudflare.cloudflared\" with administrator privileges'",
+  "cwd": "~"
+}
+```
+
+The card gets a single **Run** button and an `ACTION` badge — no Open, no Stop,
+nothing to probe. Unlike an app, an action is *waited on* rather than detached,
+because its result is the whole point: the card then shows `Ran at 14:22`, or
+the command's own first line of complaint if it failed, with the log opened for
+you. The dot going green means “the last run worked”, not “this is running”.
+
+Results live in memory, so they reset to **Ready** when the launcher restarts.
+The log on disk does not.
+
+`timeout` (seconds, default 180) caps a run. It matters because of the next
+part.
+
+### Commands that need root
+
+`sudo` cannot work here. There is no terminal attached to these commands, so
+there is nowhere to type a password — `sudo` would just fail. Wrap the command
+in `osascript ... with administrator privileges` instead and macOS puts up its
+own authorisation dialog (Touch ID or your login password). Nothing is stored
+here, and no password is ever passed on a command line.
+
+That dialog is also why actions time out: if you walk away from it, it waits
+forever, and the run would sit there holding the request open with it.
+
+`tests/test_action.py` covers all of this:
+
+```bash
+python3 workdesk/tests/test_action.py
+```
 
 ## Status is probed, not remembered
 
@@ -128,8 +176,10 @@ This page starts processes, so it is built to be uninteresting to attack:
 - **The browser never sends a command.** It sends an `id`, which is looked up in
   `apps.json`. There is no code path that executes a string from a request, so
   the worst case is starting something you had already listed yourself.
-- Launch/stop are POST and are refused when the request carries a foreign
+- Launch/stop/run are POST and are refused when the request carries a foreign
   `Origin`, so a random site you happen to visit cannot quietly poke this port.
+- An action that needs root still has to get past macOS's own dialog. Listing
+  one here does not grant anything; it only saves you opening a terminal.
 
 Anything in `apps.json` runs with your privileges — treat it like your shell
 history, and keep it to commands you would type yourself.
