@@ -251,6 +251,14 @@ that plus which config keys to refill.
   suppressed entirely when a report has only one opponent. **`goSim` must reset
   it** along with the other filters — the similar position is usually from a
   different game, so otherwise "Same move missed →" scrolls to a hidden card.
+  **When any filter combination narrows the cards down to one game**, that
+  game's win-rate curve appears above them (`charts.game_wr_chart`, one hidden
+  `.wrbox` per game emitted up front so the offline export stays standalone;
+  `showCurve` in `PRACTICE_JS` reveals the match). Blunder markers carry the
+  card's `bl<i>` id in `data-go` and are shown/hidden with their card, so the
+  chart always marks exactly what is on screen; clicking one scrolls to it.
+  Triggered by `apply()`, so it works from the date bar too, not just the
+  filter rows.
   **Delete all blunder positions** (on the count line under the filters) and
   **Restore N deleted** call `/api/practice_clear`, which rewrites
   `practice_hidden.json` and rebuilds. When nothing is left to show,

@@ -57,6 +57,13 @@ you had chosen. Opponents are listed worst-first, with the number of blunders
 against each. A report with only one opponent gets no row, since there would be
 nothing to choose.
 
+**Once the filters leave you with a single game, its win-rate curve appears above
+the cards** — the context a cropped diagram cannot give you, which is whether a
+blunder threw the game or merely dented a position you had already won. Each
+blunder still showing below is marked in red on the curve, so narrowing to
+"≥ 15 points" leaves only those marks; click one to jump to its card. Any route
+to one game works, including the date range at the top of the report.
+
 ### Voice review & the review summary
 
 At the top of the **Blunder Set** press **🎤 Start voice review** and just talk while

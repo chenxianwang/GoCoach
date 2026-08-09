@@ -9,7 +9,7 @@ from .constants import HERE, GTP_COLS, PHASES, PHASE_LABEL, PHASE_COLOR, PTS_BLU
 from .assets import PRACTICE_CLEAR_JS, TRENDS_JS, VOICE_PANEL, FLOAT_REC, VOICE_JS, BOARD_MODAL, PRACTICE_JS, CSS, GAMES_JS, TOOLTIP_JS, NAV_JS, TRAJ_JS, SUMMARY_SECT_JS  # noqa: F401
 from .data import load_config, load_games, load_hidden, practice_cleared, _enrich_from_sgf, esc, parse_date, date_key, date_label, blunder_count, game_metrics, aggregate, recommendations, phase_label, source_label_from_path  # noqa: F401
 from .board import gtp_to_xy, GoBoard, board_before, count_captures, groups_with_liberties, territory_split, group_points, diagram_svg, _chebyshev, _local_density, classify_blunder, full_board_svg, local_pattern, _rot90, _flip, _dihedral, _cell_w, pattern_similarity, blunder_similarity, _similarity_matrix, score_svg, _replay_board, final_score_board_svg, final_score_html  # noqa: F401
-from .charts import _games_data_js, _date_filter_bar, trend_chart, _flush_segment, moves_hist_svg, metric_hist_svg, _date_filter_js, _traj_spark  # noqa: F401
+from .charts import _games_data_js, _date_filter_bar, trend_chart, _flush_segment, moves_hist_svg, metric_hist_svg, _date_filter_js, _traj_spark, game_wr_chart  # noqa: F401
 from .trends import trends_section, _window_apl, improvement_metric, _improve_banner_html  # noqa: F401
 from .trajectory import _user_wr_curve, classify_trajectory, _shape_html, _wr_at, _lead_flags, _behind_flags, trajectory_section  # noqa: F401
 from .practice import practice_section  # noqa: F401

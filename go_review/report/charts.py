@@ -859,6 +859,88 @@ def _date_filter_js(chron):
     return js.replace("__GAMES__", data).replace("__META__", meta)
 
 
+def game_wr_chart(g, marks=(), width=760, height=210):
+    """One game's win rate from the user's side, with its blunders marked.
+
+    Used by the Blunder Set once its filters have narrowed the cards down to a
+    single game: the curve is the context the cropped diagrams cannot give you —
+    whether a blunder threw the game or merely dented a won position.
+
+    `marks` is a list of `(move_number, card_id, tooltip)`.  Each dot carries the
+    card's id so the practice filter can hide the ones it has filtered out; the
+    chart has to mark exactly what is on screen, or it misreports the filter.
+    """
+    tl = [t for t in g.get("timeline", [])
+          if t.get("black_winrate") is not None
+          and t.get("move_number") is not None]
+    if len(tl) < 2:
+        return ""                      # unanalysed or a stub — no curve to draw
+    flip = g.get("user_color") != "B"
+    xs = [t["move_number"] for t in tl]
+    ys = [(1.0 - t["black_winrate"]) if flip else t["black_winrate"] for t in tl]
+    x0, x1 = min(xs), max(xs)
+    span = (x1 - x0) or 1
+    pad_l, pad_r, pad_t, pad_b = 40, 14, 12, 28
+    pw, ph = width - pad_l - pad_r, height - pad_t - pad_b
+
+    def px(mv):
+        return pad_l + (mv - x0) / span * pw
+
+    def py(v):
+        return pad_t + (1 - v) * ph
+
+    p = [f'<svg viewBox="0 0 {width} {height}" width="100%" '
+         f'preserveAspectRatio="xMidYMid meet" '
+         f'style="background:#fff;border:1px solid #e3e3e3;border-radius:8px">']
+    # Winning half tinted green, losing half red, so "above the line" reads
+    # without consulting the axis.
+    p.append(f'<rect x="{pad_l}" y="{pad_t}" width="{pw}" height="{ph/2:.1f}" '
+             f'fill="#2f855a" fill-opacity="0.05"/>')
+    p.append(f'<rect x="{pad_l}" y="{pad_t+ph/2:.1f}" width="{pw}" '
+             f'height="{ph/2:.1f}" fill="#c53030" fill-opacity="0.05"/>')
+    for k in range(5):
+        v = k / 4
+        y = py(v)
+        p.append(f'<line x1="{pad_l}" y1="{y:.1f}" x2="{width-pad_r}" '
+                 f'y2="{y:.1f}" stroke="{"#b7a98f" if k == 2 else "#eee"}"'
+                 + (' stroke-dasharray="3 3"' if k == 2 else '') + '/>')
+        p.append(f'<text x="{pad_l-6}" y="{y+3:.1f}" font-size="10" '
+                 f'text-anchor="end" fill="#888">{v*100:.0f}%</text>')
+
+    step = max(1, len(tl) // 12)
+    for i in range(0, len(tl), step):
+        p.append(f'<text x="{px(xs[i]):.1f}" y="{height-pad_b+15:.1f}" '
+                 f'font-size="10" fill="#888" text-anchor="middle">{xs[i]}</text>')
+    p.append(f'<text x="{width-pad_r}" y="{height-4}" font-size="9.5" '
+             f'fill="#aaa" text-anchor="end">move number</text>')
+
+    pts = [(px(mv), py(v)) for mv, v in zip(xs, ys)]
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    p.append(f'<polyline fill="none" stroke="#2d3748" stroke-width="1.6" '
+             f'stroke-linejoin="round" points="{line}"/>')
+
+    # Blunder markers: a red square, the same "this is the move you played"
+    # convention the card diagrams use.
+    wr_at = dict(zip(xs, ys))
+    for mv, card_id, tip in marks:
+        if mv is None:
+            continue
+        v = wr_at.get(mv)
+        if v is None:                  # not on the curve — snap to the nearest ply
+            near = min(xs, key=lambda t: abs(t - mv))
+            v = wr_at[near]
+        x, y = px(mv), py(v)
+        p.append(f'<g class="wrmk" data-go="{esc(card_id)}" '
+                 f'style="cursor:pointer">')
+        p.append(f'<rect x="{x-3.5:.1f}" y="{y-3.5:.1f}" width="7" height="7" '
+                 f'fill="#e02424" stroke="#fff" stroke-width="1.2"/>')
+        p.append(f'<circle class="pt" cx="{x:.1f}" cy="{y:.1f}" r="10" '
+                 f'fill="transparent" data-tip="{esc(tip)}"></circle>')
+        p.append('</g>')
+    p.append("</svg>")
+    return "".join(p)
+
+
 def _traj_spark(w, won, width=200, height=54):
     """Small win-rate sparkline (user perspective, 0..1) with a 50% guide."""
     if not w:

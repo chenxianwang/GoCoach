@@ -2,6 +2,7 @@
 
 from .constants import PHASE_LABEL, PTS_BLUNDER, WR_BLUNDER
 from .assets import BOARD_MODAL, FLOAT_REC, PRACTICE_CLEAR_JS, PRACTICE_JS, VOICE_JS, VOICE_PANEL
+from .charts import game_wr_chart
 from .data import esc, parse_date
 from .board import _similarity_matrix, board_before, classify_blunder, diagram_svg, local_pattern, territory_split
 
@@ -162,8 +163,11 @@ def practice_section(games, hidden=None, cleared=False):
         nav.append("</div>")
     nav.append("</div>")
 
-    # Cards.
+    # Cards.  `marks` collects, per game, where its blunders sit on the win-rate
+    # curve — filled in here because this is where a card gets the `bl<i>` id the
+    # marker has to point back at.
     cards = []
+    marks = {}
     for i, e in enumerate(built):
         g, m = e["g"], e["m"]
         color = "Black" if g["user_color"] == "B" else "White"
@@ -246,6 +250,41 @@ def practice_section(games, hidden=None, cleared=False):
             f"<div class='dcap'>{cap}</div>"
             f"{line_html}"
             f"<div class='dsub'>{sub}</div>{btn}{msbtn}{notebtn}{delbtn}{fbfull}</div>")
+        marks.setdefault(g.get("filename", ""), []).append(
+            (m.get("move_number"), f"bl{i}",
+             f"Move {m['move_number']}: you played {m.get('played')}, "
+             f"-{m.get('points_lost')} pts (KataGo: {m.get('best')}). "
+             f"Click to jump to it."))
+
+    # One win-rate curve per game, all hidden.  The practice JS reveals the
+    # matching one once the filters have narrowed the cards down to a single
+    # game -- the point being the context a cropped diagram cannot give you:
+    # whether a blunder threw the game or dented an already-won position.
+    # Rendering them up front rather than fetching on demand keeps the report a
+    # standalone file, which is the whole premise of the offline export.
+    seen_games, wrboxes = set(), []
+    for i, e in enumerate(built):
+        g = e["g"]
+        fn = g.get("filename", "")
+        if fn in seen_games:
+            continue
+        seen_games.add(fn)
+        svg = game_wr_chart(g, marks.get(fn, ()))
+        if not svg:                    # no timeline (unanalysed import)
+            continue
+        res = g.get("result") or ""
+        won = "you won" if g.get("won") else "you lost"
+        head = (f"{esc(g.get('date',''))} vs <b>{esc(g.get('opponent',''))}</b>"
+                f" &middot; {esc(won)}" + (f" ({esc(res)})" if res else ""))
+        wrboxes.append(
+            f"<div class='wrbox' data-game=\"{esc(fn)}\" hidden>"
+            f"<div class='wrhd'>Win rate through this game "
+            f"<span class='wrsub'>{head}</span></div>"
+            f"{svg}"
+            f"<div class='wrft'>Your win rate, move by move. "
+            f"<span style='color:#e02424'>&#9632;</span> marks each blunder "
+            f"<b>still shown below</b> — click one to jump to its card.</div>"
+            f"</div>")
 
     # Filterable practice cards + the board modal and JS.
     return ("<h2>Blunder Set</h2>"
@@ -270,6 +309,7 @@ def practice_section(games, hidden=None, cleared=False):
               "&#128465; Delete all blunder positions</button>"
             + restore_btn
             + "</div>"
+            + "".join(wrboxes)
             + f"<div class='diags'>{''.join(cards)}</div>"
             + BOARD_MODAL
             + FLOAT_REC

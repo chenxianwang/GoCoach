@@ -422,7 +422,7 @@ PRACTICE_JS = """
   };
 
   function apply(){
-    var shown=0, gms={};
+    var shown=0, gms={}, visIds={};
     document.querySelectorAll('.diag').forEach(function(d){
       var okp = fp==='all' || d.getAttribute('data-phase')===fp;
       var okc = fc==='all' || d.getAttribute('data-cat')===fc;
@@ -434,12 +434,45 @@ PRACTICE_JS = """
       var okdt = (window.GR ? GR.inRange(d.getAttribute('data-date')) : true);
       var vis = okp && okc && okpts && okwr && okst && oko && okdt;
       d.style.display = vis ? '' : 'none';
-      if(vis){ shown++; gms[(d.getAttribute('data-key')||'').split('#')[0]]=1; }
+      // visIds is keyed by element id, which is what a chart marker points at.
+      if(vis){ shown++; gms[(d.getAttribute('data-key')||'').split('#')[0]]=1;
+               visIds[d.id]=1; }
     });
     var fl=document.getElementById('flcount');
     if(fl) fl.textContent=shown+' shown \u00B7 from '+
       Object.keys(gms).length+' game(s)';
+    showCurve(Object.keys(gms), visIds);
   }
+
+  // Down to one game -> show that game's win-rate curve above the cards. With
+  // several games in view there is no single curve to draw, and with none there
+  // is nothing to say. The markers follow the filters too: a chart marking
+  // blunders that are not on screen would misreport what you are looking at.
+  function showCurve(games, visIds){
+    var boxes=document.querySelectorAll('.wrbox');
+    if(!boxes.length) return;
+    var only = games.length===1 ? games[0] : null;
+    boxes.forEach(function(w){
+      var on = only!==null && w.getAttribute('data-game')===only;
+      w.hidden = !on;
+      if(!on) return;
+      w.querySelectorAll('.wrmk').forEach(function(mk){
+        mk.style.display = visIds[mk.getAttribute('data-go')] ? '' : 'none';
+      });
+    });
+  }
+
+  // Click a marker to jump to that blunder's card.
+  document.addEventListener('click', function(ev){
+    var t=ev.target;
+    var mk=(t && t.closest) ? t.closest('.wrmk') : null;
+    if(!mk) return;
+    var el=document.getElementById(mk.getAttribute('data-go')||'');
+    if(!el || el.style.display==='none') return;
+    el.scrollIntoView({behavior:'smooth', block:'center'});
+    el.classList.add('hl');
+    setTimeout(function(){ el.classList.remove('hl'); }, 1600);
+  });
   function wire(attr, set){
     document.querySelectorAll('.navbtn['+attr+']').forEach(function(b){
       b.addEventListener('click', function(){
@@ -917,6 +950,15 @@ th{color:#718096;font-weight:600}
 /* Wide enough for the longest single word used as a row label ("Opponent",
    "Blunders"); at 46px those overflowed into the first button. */
 .navlbl{font-size:12px;font-weight:700;color:#718096;width:64px;flex:none}
+/* The single-game win-rate curve. `display` is set on the class, so it needs
+   its own [hidden] rule to beat the UA sheet -- see the .vcpick note. */
+.wrbox{display:block;margin:0 0 18px}
+.wrbox[hidden]{display:none}
+.wrhd{font-size:13px;font-weight:700;color:#2d3748;margin:0 0 6px}
+.wrsub{font-weight:400;color:#718096;margin-left:8px}
+.wrft{font-size:11.5px;color:#718096;margin-top:5px}
+.wrmk .pt{cursor:pointer}
+.wrmk:hover rect{stroke:#1a202c}
 .navbtn{font:inherit;font-size:12px;cursor:pointer;border:1px solid var(--line);
  background:var(--card);color:var(--ink);border-radius:14px;padding:4px 11px}
 .navbtn:hover{background:var(--amber-soft);border-color:var(--amber-line)}
