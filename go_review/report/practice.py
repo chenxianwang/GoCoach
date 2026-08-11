@@ -121,6 +121,20 @@ def practice_section(games, hidden=None, cleared=False):
     opps = sorted(opp_count, key=lambda n: (-opp_count[n], n.lower()))
     opp_slug = {n: f"o{i}" for i, n in enumerate(opps)}
 
+    # How those games actually went, counted per *game* rather than per blunder --
+    # one bad game against someone is not a losing record against them.  A chip is
+    # tinted green when you beat them every time and red when they beat you every
+    # time; a mixed record is left untinted, because a single colour would have to
+    # lie about half of it, and shows a W-L badge instead.
+    opp_rec, counted = {}, set()
+    for e in built:
+        key = (e["opp"], e["g"].get("filename", ""))
+        if key in counted:
+            continue
+        counted.add(key)
+        w, l = opp_rec.get(e["opp"], (0, 0))
+        opp_rec[e["opp"]] = (w + 1, l) if e["g"].get("won") else (w, l + 1)
+
     # Navigator (clickable folders): phase row + position-type row.
     nav = ["<div class='navbar'>"]
     nav.append("<div class='navrow'><span class='navlbl'>Phase</span>")
@@ -160,16 +174,27 @@ def practice_section(games, hidden=None, cleared=False):
     # normal case, and picking them one at a time would defeat the point.
     if len(opps) > 1:
         nav.append("<div class='navrow'><span class='navlbl' "
-                   "title='Pick as many as you like -- they combine'>"
-                   "Opponent</span>")
+                   "title='Pick as many as you like -- they combine. "
+                   "Green = you beat them every time, red = they beat you "
+                   "every time'>Opponent</span>")
         nav.append("<button class='navbtn on' data-fo='all' "
                    "title='Every opponent'>All "
                    f"<i data-co='all'>{len(built)}</i></button>")
         for n in opps:
-            nav.append(f"<button class='navbtn' data-fo='{opp_slug[n]}' "
+            w, l = opp_rec.get(n, (0, 0))
+            tint = " wlw" if l == 0 < w else (" wll" if w == 0 < l else "")
+            # Only worth the space once there is something to be mixed about: on a
+            # single game the tint has already said "won" or "lost".
+            rec = ("" if w + l < 2 else
+                   f" <em class='wlrec'><b class='w'>{w}</b>-"
+                   f"<b class='l'>{l}</b></em>")
+            games = "game" if w + l == 1 else "games"
+            nav.append(f"<button class='navbtn{tint}' data-fo='{opp_slug[n]}' "
                        f"title='Blunders from your games against {esc(n)}"
-                       f" -- click more than one to combine them'>{esc(n)} "
-                       f"<i data-co='{opp_slug[n]}'>{opp_count[n]}</i></button>")
+                       f" -- you won {w} and lost {l} of those {w + l} {games}."
+                       f" Click more than one opponent to combine them'>{esc(n)} "
+                       f"<i data-co='{opp_slug[n]}'>{opp_count[n]}</i>"
+                       f"{rec}</button>")
         nav.append("</div>")
     nav.append("</div>")
 

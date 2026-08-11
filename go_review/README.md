@@ -62,6 +62,14 @@ you had chosen. Opponents are listed worst-first, with the number of blunders
 against each. A report with only one opponent gets no row, since there would be
 nothing to choose.
 
+**The chips are coloured by how those games went** — green if you beat that player
+every time, red if they beat you every time — so the row answers "who actually
+gives me trouble" as well as "where did I blunder most". Wins and losses are
+counted per *game*, not per blunder: one messy game against someone is not a
+losing record against them. A mixed record stays uncoloured and shows a small
+`2-1` badge instead, because one colour would have to lie about half of it.
+Hovering any chip spells the record out.
+
 **Once the filters leave you with a single game, its win-rate curve appears above
 the cards** — the context a cropped diagram cannot give you, which is whether a
 blunder threw the game or merely dented a position you had already won. Each

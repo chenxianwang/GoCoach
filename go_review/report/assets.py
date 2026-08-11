@@ -961,10 +961,20 @@ th{color:#718096;font-weight:600}
 .wrmk:hover rect{stroke:#1a202c}
 .navbtn{font:inherit;font-size:12px;cursor:pointer;border:1px solid var(--line);
  background:var(--card);color:var(--ink);border-radius:14px;padding:4px 11px}
+/* Opponent chips, tinted by how those games went -- green if you beat them every
+   time, red if they beat you every time (mixed records stay neutral and show a
+   W-L badge instead).  These sit *above* :hover and .on deliberately: all three
+   are one-class-plus-one specificity, so source order is what lets selecting a
+   chip still turn it gold. */
+.navbtn.wlw{background:#f0fbf4;border-color:#9ae6b4;color:#276749}
+.navbtn.wll{background:#fff5f5;border-color:#feb2b2;color:#9b2c2c}
 .navbtn:hover{background:var(--amber-soft);border-color:var(--amber-line)}
 .navbtn.on{background:var(--amber);border-color:var(--amber);color:#fff}
 .navbtn i{font-style:normal;opacity:.7;font-size:11px;margin-left:3px}
 .navbtn.on i{opacity:.9}
+.wlrec{font-style:normal;font-size:10.5px;font-weight:700;margin-left:5px}
+.wlrec .w{color:#2f855a}.wlrec .l{color:#c53030}
+.navbtn.on .wlrec .w,.navbtn.on .wlrec .l{color:#fff;opacity:.9}
 .datebar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0 14px;
  padding:9px 12px;background:var(--line-soft);border:1px solid var(--line);
  border-radius:10px}

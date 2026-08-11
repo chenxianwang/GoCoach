@@ -252,8 +252,15 @@ that plus which config keys to refill.
   than hiding every card. Names are **slugged** (`o0`, `o1`, …) like `cat_slug`,
   because `recount` looks the counters up with `i[data-co="<value>"]` and a
   nickname containing a quote or bracket would break that selector. The row is
-  suppressed entirely when a report has only one opponent. **`goSim` must reset
-  it** along with the other filters — the similar position is usually from a
+  suppressed entirely when a report has only one opponent. Chips are **tinted by
+  the win/loss record** of the games behind them (`opp_rec`, counted per *game*
+  via a `(opp, filename)` dedup set, not per blunder): `.wlw` green for an
+  all-win record, `.wll` red for an all-loss one, no tint for a mixed record,
+  which gets a `.wlrec` W-L badge instead (also shown for any uniform record
+  spanning more than one game). The three `.navbtn` variants all have
+  one-class-plus-one specificity, so **`.wlw`/`.wll` must stay above `:hover`
+  and `.on` in the stylesheet** or a selected chip stops turning gold.
+  **`goSim` must reset it** along with the other filters — the similar position is usually from a
   different game, so otherwise "Same move missed →" scrolls to a hidden card.
   **When any filter combination narrows the cards down to one game**, that
   game's win-rate curve appears above them (`charts.game_wr_chart`, one hidden
