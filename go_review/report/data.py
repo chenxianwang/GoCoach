@@ -107,6 +107,54 @@ def date_label(g):
     return d.strftime("%m-%d") if d else "?"
 
 
+def game_time(g):
+    """When the game was played, as sortable epoch seconds.
+
+    The `date` field is only ever a day, but you play several games a day, so a
+    day is not enough to order them.  Both filename shapes do carry the clock:
+
+      LizzieYZY  `chenjia11_Vs_cxw1990_20260805230922.sgf`  -- a local timestamp
+      Fox        `20260617_A[20]_VS_B[20]_1781662914030031220.sgf`
+                 -- the trailing chess-id begins with the epoch seconds
+
+    Both are reduced to real seconds, so a report holding a mix of the two still
+    orders correctly.  Comparing the raw trailing numbers (which is what
+    `_game_recency_key` does) would not: every 19-digit Fox id outranks every
+    14-digit timestamp regardless of when the games were played.  No report
+    mixes them today, which is why that has never shown up.
+
+    A filename carrying neither falls back to midnight on its date, keeping the
+    game with its own day rather than scattering it.
+    """
+    fn = g.get("filename", "") or ""
+    m = re.match(r"(20\d{2})(\d{2})(\d{2})_.*?(\d{10})\d*\.sgf$", fn)
+    if m:
+        ep = float(m.group(4))
+        # It is a chess-id that happens to open with an epoch, so trust it only
+        # when it lands on the day the name already claims.  Either side of the
+        # timezone is accepted: an 8-hour offset shared by every game cannot
+        # change their order.
+        try:
+            day = datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            for off in (0, 8 * 3600):
+                if datetime.datetime.utcfromtimestamp(ep + off).date() == day:
+                    return ep
+        except (ValueError, OSError, OverflowError):
+            pass
+    m = re.search(r"(20\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})", fn)
+    if m:
+        try:
+            return datetime.datetime(*(int(x) for x in m.groups())).timestamp()
+        except (ValueError, OSError, OverflowError):
+            pass
+    d = parse_date(g)
+    try:
+        return datetime.datetime(d.year, d.month, d.day).timestamp() if d \
+            else float("-inf")
+    except (ValueError, OSError, OverflowError):
+        return float("-inf")
+
+
 # ---- per-game metrics ------------------------------------------------------
 
 def blunder_count(g):

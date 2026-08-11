@@ -3,7 +3,7 @@
 from .constants import PHASE_LABEL, PTS_BLUNDER, WR_BLUNDER
 from .assets import BOARD_MODAL, FLOAT_REC, PRACTICE_CLEAR_JS, PRACTICE_JS, VOICE_JS, VOICE_PANEL
 from .charts import game_wr_chart
-from .data import date_key, esc, parse_date
+from .data import date_key, esc, game_time, parse_date
 from .board import _similarity_matrix, board_before, classify_blunder, diagram_svg, local_pattern, territory_split
 
 
@@ -118,7 +118,19 @@ def practice_section(games, hidden=None, cleared=False):
     for e in built:
         e["opp"] = (e["g"].get("opponent") or "").strip() or "(unknown)"
         opp_count[e["opp"]] = opp_count.get(e["opp"], 0) + 1
-    opps = sorted(opp_count, key=lambda n: (-opp_count[n], n.lower()))
+    # Most recently played first, matching Game-by-game and Trajectory -- the
+    # row then reads as "who you have been losing to lately" rather than as an
+    # all-time table, and the opponent you actually want after a session is at
+    # the left end.  An opponent is placed by their *latest* game, since that is
+    # the one that put them at the front.  Ordering by blunder count is still
+    # available at a glance: the count is printed on every chip.
+    opp_last, opp_day = {}, {}
+    for e in built:
+        t = game_time(e["g"])
+        if t > opp_last.get(e["opp"], float("-inf")):
+            opp_last[e["opp"]] = t
+            opp_day[e["opp"]] = date_key(e["g"])
+    opps = sorted(opp_count, key=lambda n: (-opp_last[n], n.lower()))
     opp_slug = {n: f"o{i}" for i, n in enumerate(opps)}
 
     # How those games actually went, counted per *game* rather than per blunder --
@@ -174,9 +186,9 @@ def practice_section(games, hidden=None, cleared=False):
     # normal case, and picking them one at a time would defeat the point.
     if len(opps) > 1:
         nav.append("<div class='navrow'><span class='navlbl' "
-                   "title='Pick as many as you like -- they combine. "
-                   "Green = you beat them every time, red = they beat you "
-                   "every time'>Opponent</span>")
+                   "title='Most recently played first. Pick as many as you "
+                   "like -- they combine. Green = you beat them every time, "
+                   "red = they beat you every time'>Opponent</span>")
         nav.append("<button class='navbtn on' data-fo='all' "
                    "title='Every opponent'>All "
                    f"<i data-co='all'>{len(built)}</i></button>")
@@ -191,7 +203,8 @@ def practice_section(games, hidden=None, cleared=False):
             games = "game" if w + l == 1 else "games"
             nav.append(f"<button class='navbtn{tint}' data-fo='{opp_slug[n]}' "
                        f"title='Blunders from your games against {esc(n)}"
-                       f" -- you won {w} and lost {l} of those {w + l} {games}."
+                       f" -- you won {w} and lost {l} of those {w + l} {games},"
+                       f" last played {esc(opp_day.get(n, '?'))}."
                        f" Click more than one opponent to combine them'>{esc(n)} "
                        f"<i data-co='{opp_slug[n]}'>{opp_count[n]}</i>"
                        f"{rec}</button>")

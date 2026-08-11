@@ -252,7 +252,18 @@ that plus which config keys to refill.
   than hiding every card. Names are **slugged** (`o0`, `o1`, …) like `cat_slug`,
   because `recount` looks the counters up with `i[data-co="<value>"]` and a
   nickname containing a quote or bracket would break that selector. The row is
-  suppressed entirely when a report has only one opponent. Chips are **tinted by
+  suppressed entirely when a report has only one opponent. Chips are ordered
+  **most recently played first** (each opponent placed by their latest game),
+  matching Game-by-game and Trajectory. The key is `data.game_time`, which
+  resolves a game to **epoch seconds** rather than a day: several games a day is
+  the normal case, so `date_key` alone would tie most of the row. It reads the
+  clock out of the filename — a LizzieYZY timestamp (`..._20260805230922.sgf`)
+  or the Fox chess-id, whose first 10 digits are the epoch (validated against
+  the leading date in the same name before being trusted). Prefer it to
+  `pages._game_recency_key`, which compares the raw trailing digits and would
+  therefore sort every 19-digit Fox id after every 14-digit timestamp; that is
+  latent only because no report currently mixes the two sources.
+  Chips are **tinted by
   the win/loss record** of the games behind them (`opp_rec`, counted per *game*
   via a `(opp, filename)` dedup set, not per blunder): `.wlw` green for an
   all-win record, `.wll` red for an all-loss one, no tint for a mixed record,

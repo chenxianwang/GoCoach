@@ -58,9 +58,15 @@ so "middlegame misreads of 10+ points against one player" is three clicks.
 **Opponent is the one row you can pick several of** — click as many names as you
 like and they add up, which is what you want when several of them play the same
 way. Clicking **All** clears the selection, and so does turning off the last name
-you had chosen. Opponents are listed worst-first, with the number of blunders
-against each. A report with only one opponent gets no row, since there would be
-nothing to choose.
+you had chosen. A report with only one opponent gets no row, since there would
+be nothing to choose.
+
+Opponents are listed **most recently played first**, matching Game by game and
+Trajectory, so the player you want after an evening's Go is at the left end. The
+order goes down to the minute, not just the day — the clock time comes out of the
+SGF filename (LizzieYZY writes a timestamp, Fox a game id that opens with one),
+because the date recorded inside the game is only ever a day and you often play
+several in one. The blunder count is still printed on every chip.
 
 **The chips are coloured by how those games went** — green if you beat that player
 every time, red if they beat you every time — so the row answers "who actually
