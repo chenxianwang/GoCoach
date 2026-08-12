@@ -52,6 +52,18 @@
       "cwd": "~"
     },
     {
+      "id": "extract-audio",
+      "name": "Video → Audio",
+      "emoji": "🎵",
+      "type": "action",
+      "note": "Pull the audio out of a video as a small Opus .webm. Asks which video, then where to save it.",
+      "_dialog_note": "The two file choices are native macOS dialogs, not fields on the card: the browser only ever sends an id, never a command or a path.",
+      "command": "'/Users/chenxianwang/Desktop/ClaudeCode-Go/workdesk/bin/extract-audio.sh'",
+      "cwd": "~",
+      "timeout": 1800,
+      "_timeout_note": "The 180s default is sized for a password dialog. This one waits on two file dialogs and then a real encode, so a long recording plus a coffee break would otherwise be killed mid-write."
+    },
+    {
       "id": "lizzie",
       "name": "LizzieYZY",
       "icon": "goban",

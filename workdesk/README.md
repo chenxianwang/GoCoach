@@ -100,6 +100,38 @@ here, and no password is ever passed on a command line.
 That dialog is also why actions time out: if you walk away from it, it waits
 forever, and the run would sit there holding the request open with it.
 
+### Actions that need to ask you something
+
+**Video → Audio** (`bin/extract-audio.sh`) runs
+
+```bash
+ffmpeg -i input.mov -vn -c:a libopus -b:a 128k output.webm
+```
+
+which needs two things the card cannot give it: which video, and where to put
+the result. It asks with native macOS dialogs — `choose file`, then
+`choose file name` pre-filled with the video's own name and folder. That is the
+only way to do it here, and deliberately so: **the browser only ever sends an
+id**, so a card that took a path from the page would be a card that takes
+anything from the page. The dialogs belong to your Mac, not to the web page.
+
+Two things that look like detail and are not:
+
+- **It is a script, not a `command` string.** Inlining it would mean escaping
+  the same text three times over — JSON, then shell, then AppleScript — and one
+  stray quote is the difference between running and silently not running.
+  Filenames reach AppleScript as `argv`, never spliced into its source, because
+  yours are routinely Chinese and may contain quotes.
+- **`"timeout": 1800`.** The 180s default is sized for a password dialog. This
+  one waits on two file dialogs *and* an encode, so the default would kill a run
+  mid-write if you took a break between them.
+
+Cancelling either dialog is reported as `Cancelled -- no video chosen.` rather
+than an error, and the card's message is the *first* line a command prints, so
+the script leads with the sentence worth reading and keeps ffmpeg's own account
+below it in the log. On success it reveals the new file in Finder, since the
+card can only tell you that the run worked, not where the audio went.
+
 `tests/test_action.py` covers all of this:
 
 ```bash
