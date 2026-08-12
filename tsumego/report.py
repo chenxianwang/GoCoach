@@ -61,6 +61,19 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .tag{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11.5px;font-weight:600;color:#fff}
 .mv{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600}
 .good{color:#2f9e44}.bad{color:#c92a2a}
+/* Problem links take their "already opened" colour from `.seen`, which is ours
+   and lives in localStorage.  `:visited` is pinned to the unopened blue on
+   purpose: a page can neither read nor clear the browser's visited state, so
+   while history was doing the colouring there was nothing a reset button could
+   have reset. */
+a.q,a.q:visited{color:#1c7ed6}
+a.q.seen,a.q.seen:visited{color:#7048e8}
+.rst{background:none;border:1px solid #e4e7ec;border-radius:8px;padding:5px 11px;
+  font:inherit;font-size:12.5px;color:#475467;cursor:pointer;white-space:nowrap}
+.rst:hover{background:#f2f4f7;color:#1a202c}
+/* No `display` is set on .rst, so [hidden] works on its own -- this rule is
+   here so that adding one later cannot silently strand the button on screen. */
+.rst[hidden]{display:none}
 .h2row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:38px 0 6px}
 .h2row h2{margin:0}
 .filt{display:inline-flex;background:#eef0f3;border-radius:8px;padding:3px;gap:2px}
@@ -106,6 +119,22 @@ def esc(x):
 
 def pct(x, digits=0):
     return "--" if x is None else f"{x * 100:.{digits}f}%"
+
+
+def qlink(publicid):
+    """A link to one problem on 101weiqi.
+
+    `class='q'` and `data-q` are what the "already opened" colour hangs off. That
+    colour is ours, kept in localStorage, rather than the browser's `:visited` --
+    a page can neither read nor clear visited state (deliberately, for privacy),
+    so while history did the colouring there was no way to offer a reset. Every
+    problem link on the page goes through here so that opening one from any list
+    marks it in all of them.
+    """
+    pid = esc(publicid)
+    return (f"<a class='q' data-q='{pid}' "
+            f"href='https://www.101weiqi.com/q/{pid}/' "
+            f"target='_blank' rel='noopener'>Q-{pid}</a>")
 
 
 # -- chart primitives ----------------------------------------------------
@@ -208,7 +237,17 @@ def _headline(agg):
                "<button id='f-done' onclick=\"setDrillFilter('done')\">"
                "Understood</button>"
                "<button id='f-all' onclick=\"setDrillFilter('all')\">All</button>"
-               "</div></div>")
+               "</div>"
+               # Sits with the filter for the same reason the filter sits here:
+               # the opened marks span every category, so the button cannot
+               # belong to any one list.  Hidden until there is something to
+               # clear, so it never offers to undo nothing.
+               "<button id='seen-reset' class='rst' hidden onclick='resetSeen()' "
+               "title='Problems you have opened are shown in a second colour so "
+               "you can see where you got to. Clearing that starts a fresh "
+               "round. It does not touch what you have marked understood.'>"
+               "&#8634; Clear opened marks</button>"
+               "</div>")
     out.append("<p class='sub'>Every wrong answer, matched against the crowd move "
                "tree. These three want different training, which is the whole "
                "point of separating them.</p>")
@@ -333,8 +372,7 @@ def _traps(agg, limit=15):
     for a in traps:
         times = a["times"]
         rows.append(
-            f"<tr><td><a href='https://www.101weiqi.com/q/{esc(a['publicid'])}/' "
-            f"target='_blank' rel='noopener'>Q-{esc(a['publicid'])}</a></td>"
+            f"<tr><td>{qlink(a['publicid'])}</td>"
             f"<td>{esc(a['qtypename'])}</td>"
             f"<td class='num'>{times}&times;</td>"
             f"<td class='mv bad'>{esc(a['my_first'])}</td>"
@@ -357,8 +395,7 @@ def _repeats(agg, limit=15):
             "<th>Last try</th><th>Correct</th><th>Failure</th></tr>"]
     for r in reps:
         rows.append(
-            f"<tr><td><a href='https://www.101weiqi.com/q/{esc(r['publicid'])}/' "
-            f"target='_blank' rel='noopener'>Q-{esc(r['publicid'])}</a></td>"
+            f"<tr><td>{qlink(r['publicid'])}</td>"
             f"<td>{esc(r['type'])}</td>"
             f"<td class='num'>{r['seen']}</td><td class='num'>{r['failed']}</td>"
             f"<td class='mv bad'>{esc(r['my_first'])}</td>"
@@ -406,6 +443,54 @@ var KINDS = __KINDS__;
 var INTERACTIVE = __INTERACTIVE__;
 var openKind = null;
 var drillFilter = 'todo';
+
+// Which problems you have opened, by publicid.  Kept here rather than left to
+// the browser's :visited because visited state is unreadable and unclearable
+// from a page -- so this is the only version of "already opened" that a Clear
+// button can actually clear.  It is also per-browser, which is what you want:
+// it says where you got to in this round, not something about the history.
+var SEEN_KEY = 'tsumego_seen';
+var SEEN = (function(){
+  try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); }
+  catch(e){ return new Set(); }      // private mode, or someone else's junk
+})();
+
+function seenSave(){
+  try { localStorage.setItem(SEEN_KEY, JSON.stringify(Array.from(SEEN))); }
+  catch(e){}                          // a full or disabled store is not fatal
+}
+
+// Re-run after every render: the drill list is rebuilt from KINDS on each open,
+// filter change and Understood click, so the marks have to be reapplied rather
+// than assumed to have survived.
+function paintSeen(){
+  document.querySelectorAll('a.q').forEach(function(a){
+    a.classList.toggle('seen', SEEN.has(a.getAttribute('data-q')));
+  });
+  var b = document.getElementById('seen-reset');
+  if(b){
+    b.textContent = '↺ Clear opened marks (' + SEEN.size + ')';
+    b.hidden = (SEEN.size === 0);
+  }
+}
+
+// Delegated, so it covers both the tables rendered by Python and the drill rows
+// built later in JS, without either having to remember an onclick.
+document.addEventListener('click', function(ev){
+  var a = (ev.target && ev.target.closest) ? ev.target.closest('a.q') : null;
+  if(!a) return;
+  var id = a.getAttribute('data-q');
+  if(!id || SEEN.has(id)) return;
+  SEEN.add(id);
+  seenSave();
+  paintSeen();
+});
+
+function resetSeen(){
+  SEEN.clear();
+  seenSave();
+  paintSeen();
+}
 
 function esc(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -467,6 +552,7 @@ function showKind(kind){
               ? 'Nothing in this category is marked understood yet.'
               : 'Everything in this category is marked understood.';
     box.innerHTML=h+'<div class="panel"><p class="sub" style="margin:0">'+msg+'</p></div>';
+    paintSeen();
     return;
   }
   h+='<div class="panel"><table><tr><th>Problem</th><th>Type</th>'
@@ -474,8 +560,9 @@ function showKind(kind){
     +(INTERACTIVE?'<th></th>':'')+'</tr>';
   view.forEach(function(r){
     h+='<tr id="row-'+r.qid+'" class="'+(r.hidden?'done':'')+'">'
-      +'<td><a href="https://www.101weiqi.com/q/'+r.publicid+'/" target="_blank" '
-      +'rel="noopener">Q-'+r.publicid+'</a></td>'
+      +'<td><a class="q" data-q="'+esc(r.publicid)+'" '
+      +'href="https://www.101weiqi.com/q/'+r.publicid+'/" target="_blank" '
+      +'rel="noopener">Q-'+esc(r.publicid)+'</a></td>'
       +'<td>'+esc(r.qtypename)+'</td>'
       +'<td class="num">'+r.times+'×</td>'
       +'<td>'+detail(r)+'</td>'
@@ -486,6 +573,7 @@ function showKind(kind){
       +'</tr>';
   });
   box.innerHTML=h+'</table></div>';
+  paintSeen();
   box.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
@@ -522,6 +610,10 @@ function mark(qid, hide){
       if(btn){ btn.disabled=false; btn.textContent='Could not save'; }
     });
 }
+
+// The static tables above the drill lists are already in the document, so they
+// need one pass at load; every later render calls paintSeen itself.
+paintSeen();
 </script>
 """
 

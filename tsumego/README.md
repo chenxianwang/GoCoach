@@ -90,6 +90,21 @@ them the lists show. It starts on *To work through*, which is the drill list; fl
 to *Understood* to revise what you have already ticked off, or *All* to see the
 raw history. It only filters the lists — the counts stay put, for the same reason.
 
+### Where you got to in this round
+
+Opening a problem colours its `Q-` link, so you can see at a glance how far down
+a list you have worked. **↺ Clear opened marks** beside the filter puts them all
+back to unopened for a second pass. It is separate from **Understood**: one says
+"I have looked at this today", the other "I have learned this for good", and
+clearing the first leaves the second alone.
+
+That colour is *ours*, not the browser's `:visited` — which is why the button can
+exist at all. A page can neither read nor clear visited state (deliberately, for
+privacy), so while browser history did the colouring there was nothing to reset;
+`:visited` is now pinned to the unopened blue to keep it out of the way. The
+marks live in `localStorage`, so they are per-browser and never leave your Mac,
+and a problem opened from any list shows as opened in all of them.
+
 The buttons need the server, so they appear on the Skill Test page in the app.
 A dashboard built with `python3 -m tsumego report` has nothing to POST to, so it
 shows the same lists read-only rather than buttons that would silently fail — but
