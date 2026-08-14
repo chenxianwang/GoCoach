@@ -41,6 +41,12 @@ KataGo/
 一目弈镜_小程序落地方案_个人主体.md
 一目弈镜_iOS_App_项目计划.md
 
+# ── LizzieYZY autosave ─────────────────────────────────────────
+# Rewritten every session and regenerated on next launch. The two .bmp board
+# snapshots are 8 MB each and change byte-for-byte every time, so tracking them
+# grew the history of a public repo by ~16 MB per commit for nothing.
+save/
+
 # ── python / jupyter / OS cruft ─────────────────────────────────
 __pycache__/
 *.pyc
