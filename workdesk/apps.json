@@ -43,12 +43,22 @@
     },
     {
       "id": "kick-tunnel",
-      "name": "Kick Cloudflare Tunnel",
+      "name": "Kick Coach Tunnel",
       "emoji": "🌩️",
       "type": "action",
       "note": "Force cloudflared to reconnect now instead of waiting out its backoff. Use when my-english-coach.com shows Error 1033.",
       "_sudo_note": "kickstart needs root, and there is no terminal here to type a password into -- osascript asks macOS for the authorisation dialog instead, so no password is ever stored or passed on a command line.",
       "command": "osascript -e 'do shell script \"launchctl kickstart -k system/com.cloudflare.cloudflared\" with administrator privileges'",
+      "cwd": "~"
+    },
+    {
+      "id": "kick-neo-tunnel",
+      "name": "Kick Neo Tunnel",
+      "emoji": "🦊",
+      "type": "action",
+      "note": "Same for Neo's own tunnel. Use when neo-is-learning.com shows Error 530 or 1033, or Neo says it cannot ask its server about photos.",
+      "_sudo_note": "No password dialog here: Neo's tunnel is a LaunchAgent in this user's own session, not a system daemon, so kickstart needs no root.",
+      "command": "launchctl kickstart -k gui/$(id -u)/com.chenxianwang.neo-tunnel",
       "cwd": "~"
     },
     {
