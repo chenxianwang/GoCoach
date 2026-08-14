@@ -16,12 +16,20 @@ def practice_section(games, hidden=None, cleared=False):
     hidden = set(hidden or ())
     items = []
     total_blunders = 0
+    # Blunders per game *before* anything is deleted.  A game at 0 here is one
+    # you played clean, which is a different fact from a game whose blunders you
+    # have since worked through and removed -- the opponent row shows them
+    # differently and must not confuse the two.
+    game_blunders = {}
     for g in games:
+        fn = g.get("filename", "")
+        game_blunders.setdefault(fn, 0)
         for m in g.get("all_user_moves", []):
             if (m.get("points_lost", 0) >= PTS_BLUNDER or
                     m.get("winrate_lost", 0) >= WR_BLUNDER):
                 total_blunders += 1     # counts every blunder (matches Overview)
-                key = f"{g.get('filename','')}#{m.get('move_number')}"
+                game_blunders[fn] += 1
+                key = f"{fn}#{m.get('move_number')}"
                 if key in hidden or cleared:
                     continue
                 items.append((g, m))
@@ -109,43 +117,42 @@ def practice_section(games, hidden=None, cleared=False):
     phase_count = {ph: sum(1 for e in built if e["phase"] == ph)
                    for ph in phases}
 
-    # Opponents, worst first.  Their names come from the SGF, so they are
-    # arbitrary text (usually a Chinese nickname) and are slugged rather than
-    # used raw: `recount` finds the counters with `i[data-co="<value>"]`, and a
-    # nickname containing a quote or bracket would break that selector.  Same
-    # reason `cat_slug` exists.
+    # One chip per *game*, not per opponent.  Two games against the same person
+    # are two different games -- you may have been crushed in one and comfortable
+    # in the other -- and merging them made the row unable to say so: it had to
+    # sum their blunders and give up on colouring a mixed record.  Splitting them
+    # also lets the row cover games with *no* blunders, which have no cards at all
+    # and so could never have contributed to a per-opponent tally.
+    #
+    # Every game listed here, in most-recently-played order, matching Game-by-game
+    # and Trajectory -- the game you actually want after a session is at the left
+    # end.  Filename breaks the tie if two games somehow land on the same second.
+    order = sorted(games, key=lambda g: (-game_time(g), g.get("filename", "")))
+    # Names come from the SGF, so they are arbitrary text (usually a Chinese
+    # nickname) and the *filename* is slugged rather than either being used raw:
+    # `recount` finds the counters with `i[data-co="<value>"]`, and a nickname
+    # containing a quote or bracket would break that selector.  Same reason
+    # `cat_slug` exists.
+    opp_slug = {g.get("filename", ""): f"o{i}" for i, g in enumerate(order)}
+    opp_name = {g.get("filename", ""): (g.get("opponent") or "").strip()
+                or "(unknown)" for g in order}
+
+    # `#1`, `#2` … only where a name repeats: numbering a one-off game would be
+    # noise.  Numbered oldest-first, the way you would count them off yourself,
+    # so #1 stays #1 when a later game against the same person is imported --
+    # even though the row shows the newest of them first.
+    played = {}
+    for g in sorted(games, key=lambda g: (game_time(g), g.get("filename", ""))):
+        played.setdefault(opp_name[g.get("filename", "")], []).append(
+            g.get("filename", ""))
+    nth = {fn: (i + 1, len(fns))
+           for fns in played.values() for i, fn in enumerate(fns)}
+
     opp_count = {}
     for e in built:
-        e["opp"] = (e["g"].get("opponent") or "").strip() or "(unknown)"
-        opp_count[e["opp"]] = opp_count.get(e["opp"], 0) + 1
-    # Most recently played first, matching Game-by-game and Trajectory -- the
-    # row then reads as "who you have been losing to lately" rather than as an
-    # all-time table, and the opponent you actually want after a session is at
-    # the left end.  An opponent is placed by their *latest* game, since that is
-    # the one that put them at the front.  Ordering by blunder count is still
-    # available at a glance: the count is printed on every chip.
-    opp_last, opp_day = {}, {}
-    for e in built:
-        t = game_time(e["g"])
-        if t > opp_last.get(e["opp"], float("-inf")):
-            opp_last[e["opp"]] = t
-            opp_day[e["opp"]] = date_key(e["g"])
-    opps = sorted(opp_count, key=lambda n: (-opp_last[n], n.lower()))
-    opp_slug = {n: f"o{i}" for i, n in enumerate(opps)}
-
-    # How those games actually went, counted per *game* rather than per blunder --
-    # one bad game against someone is not a losing record against them.  A chip is
-    # tinted green when you beat them every time and red when they beat you every
-    # time; a mixed record is left untinted, because a single colour would have to
-    # lie about half of it, and shows a W-L badge instead.
-    opp_rec, counted = {}, set()
-    for e in built:
-        key = (e["opp"], e["g"].get("filename", ""))
-        if key in counted:
-            continue
-        counted.add(key)
-        w, l = opp_rec.get(e["opp"], (0, 0))
-        opp_rec[e["opp"]] = (w + 1, l) if e["g"].get("won") else (w, l + 1)
+        fn = e["g"].get("filename", "")
+        e["oslug"] = opp_slug[fn]
+        opp_count[fn] = opp_count.get(fn, 0) + 1
 
     # Navigator (clickable folders): phase row + position-type row.
     nav = ["<div class='navbar'>"]
@@ -180,34 +187,47 @@ def practice_section(games, hidden=None, cleared=False):
                "<i id='cnt-todo'>0</i></button>"
                "<button class='navbtn' data-fst='done'>Mastered "
                "<i id='cnt-done'>0</i></button></div>")
-    # One opponent means there is nothing to choose between, so the row is only
+    # One game means there is nothing to choose between, so the row is only
     # worth its space when there are several.  Unlike every row above it this
-    # one is multi-select: reviewing two or three opponents together is the
+    # one is multi-select: reviewing two or three games together is the
     # normal case, and picking them one at a time would defeat the point.
-    if len(opps) > 1:
+    if len(order) > 1:
         nav.append("<div class='navrow'><span class='navlbl' "
-                   "title='Most recently played first. Pick as many as you "
-                   "like -- they combine. Green = you beat them every time, "
-                   "red = they beat you every time'>Opponent</span>")
+                   "title='One chip per game, most recently played first; "
+                   "#1, #2 tell repeat meetings apart. Pick as many as you "
+                   "like -- they combine. Green = you won it, red = you lost "
+                   "it, blue = no blunders at all'>Opponent</span>")
         nav.append("<button class='navbtn on' data-fo='all' "
-                   "title='Every opponent'>All "
+                   "title='Every game'>All "
                    f"<i data-co='all'>{len(built)}</i></button>")
-        for n in opps:
-            w, l = opp_rec.get(n, (0, 0))
-            tint = " wlw" if l == 0 < w else (" wll" if w == 0 < l else "")
-            # Only worth the space once there is something to be mixed about: on a
-            # single game the tint has already said "won" or "lost".
-            rec = ("" if w + l < 2 else
-                   f" <em class='wlrec'><b class='w'>{w}</b>-"
-                   f"<b class='l'>{l}</b></em>")
-            games = "game" if w + l == 1 else "games"
-            nav.append(f"<button class='navbtn{tint}' data-fo='{opp_slug[n]}' "
-                       f"title='Blunders from your games against {esc(n)}"
-                       f" -- you won {w} and lost {l} of those {w + l} {games},"
-                       f" last played {esc(opp_day.get(n, '?'))}."
-                       f" Click more than one opponent to combine them'>{esc(n)} "
-                       f"<i data-co='{opp_slug[n]}'>{opp_count[n]}</i>"
-                       f"{rec}</button>")
+        for g in order:
+            fn = g.get("filename", "")
+            slug, name = opp_slug[fn], opp_name[fn]
+            n, of = nth[fn]
+            # A game you played clean has no cards to filter to, so the point of
+            # its chip is the fact itself -- it gets a colour of its own rather
+            # than the win/loss green, which would make the one game worth
+            # noticing look like all the others.
+            clean = game_blunders.get(fn, 0) == 0
+            won = bool(g.get("won"))
+            tint = " wlc" if clean else (" wlw" if won else " wll")
+            # Green/red carry the result, but a colour alone is not readable by
+            # everyone (or in a screenshot), so the letter says it too.
+            res = (f" <em class='wlres'>{'W' if won else 'L'}</em>"
+                   if not clean else " <em class='wlres'>&#10003; clean</em>")
+            label = esc(name) + (f" <em class='gno'>#{n}</em>" if of > 1 else "")
+            tip = (f"No blunders in this game -- you played it clean"
+                   if clean else
+                   f"Blunders from this game -- you {'won' if won else 'lost'} it")
+            nav.append(f"<button class='navbtn{tint}' data-fo='{slug}' "
+                       f"data-gamefile=\"{esc(fn)}\" "
+                       f"data-clean='{1 if clean else 0}' "
+                       f"title='{tip}. Against {esc(name)}"
+                       + (f", meeting #{n} of {of}" if of > 1 else "")
+                       + f", played {esc(date_key(g))}."
+                       f" Click more than one to combine them'>{label} "
+                       f"<i data-co='{slug}'>{opp_count.get(fn, 0)}</i>"
+                       f"{res}</button>")
         nav.append("</div>")
     nav.append("</div>")
 
@@ -286,7 +306,7 @@ def practice_section(games, hidden=None, cleared=False):
             f"data-date='{_gd}' "
             f"data-phase='{e['phase']}' "
             f"data-cat='{cat_slug[e['name']]}' "
-            f"data-opp='{opp_slug[e['opp']]}' "
+            f"data-opp='{e['oslug']}' "
             f"data-pts='{m.get('points_lost', 0)}' data-wr='{wr:.1f}' "
             f"data-est='{1 if has_est else 0}' data-estline=\"{est}\" "
             f"data-played=\"{esc(m.get('played') or '')}\" "
@@ -310,13 +330,12 @@ def practice_section(games, hidden=None, cleared=False):
     # whether a blunder threw the game or dented an already-won position.
     # Rendering them up front rather than fetching on demand keeps the report a
     # standalone file, which is the whole premise of the offline export.
-    seen_games, wrboxes = set(), []
-    for i, e in enumerate(built):
-        g = e["g"]
+    # Built from every game, not only the ones with cards: picking the chip for a
+    # game you played clean would otherwise show nothing at all, when its curve is
+    # exactly what there is to look at.
+    wrboxes = []
+    for g in order:
         fn = g.get("filename", "")
-        if fn in seen_games:
-            continue
-        seen_games.add(fn)
         svg = game_wr_chart(g, marks.get(fn, ()))
         if not svg:                    # no timeline (unanalysed import)
             continue
@@ -329,10 +348,14 @@ def practice_section(games, hidden=None, cleared=False):
             f"<div class='wrhd'>Win rate through this game "
             f"<span class='wrsub'>{head}</span></div>"
             f"{svg}"
-            f"<div class='wrft'>Your win rate, move by move. "
-            f"<span style='color:#e02424'>&#9632;</span> marks each blunder "
-            f"<b>still shown below</b> — click one to jump to its card.</div>"
-            f"</div>")
+            + (f"<div class='wrft'>Your win rate, move by move. "
+               f"<span style='color:#e02424'>&#9632;</span> marks each blunder "
+               f"<b>still shown below</b> — click one to jump to its card.</div>"
+               if game_blunders.get(fn, 0) else
+               "<div class='wrft'>Your win rate, move by move. "
+               "Nothing in this game crossed the blunder line, so there are "
+               "no markers on it.</div>")
+            + "</div>")
 
     # Filterable practice cards + the board modal and JS.
     return ("<h2>Blunder Set</h2>"
@@ -357,6 +380,11 @@ def practice_section(games, hidden=None, cleared=False):
               "&#128465; Delete all blunder positions</button>"
             + restore_btn
             + "</div>"
+            # Filtering down to nothing used to leave a blank strip below the
+            # chips, which reads as broken rather than as an answer.  It became
+            # worth fixing once the row could offer a game with no blunders at
+            # all: an empty grid is the *right* result there and should say so.
+            + "<div class='nobl' id='noblund' hidden></div>"
             + "".join(wrboxes)
             + f"<div class='diags'>{''.join(cards)}</div>"
             + BOARD_MODAL

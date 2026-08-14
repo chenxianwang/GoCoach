@@ -438,10 +438,29 @@ PRACTICE_JS = """
       if(vis){ shown++; gms[(d.getAttribute('data-key')||'').split('#')[0]]=1;
                visIds[d.id]=1; }
     });
+    // A game you played clean has no cards, so nothing above can speak for it.
+    // When it is the only thing picked, name it here instead -- otherwise
+    // choosing it would blank the section and look like a bug, when "there is
+    // nothing to review in this one" is the whole reason it is on the row.
+    var lone = (fo && fo.size===1)
+      ? document.querySelector('.navbtn[data-fo="'+Array.from(fo)[0]+'"]') : null;
+    var clean = (!shown && lone && lone.getAttribute('data-clean')==='1')
+      ? lone.getAttribute('data-gamefile') : null;
     var fl=document.getElementById('flcount');
-    if(fl) fl.textContent=shown+' shown \u00B7 from '+
-      Object.keys(gms).length+' game(s)';
-    showCurve(Object.keys(gms), visIds);
+    if(fl) fl.textContent = clean
+      ? 'No blunders in this game \u00B7 nothing to review here'
+      : shown+' shown \u00B7 from '+Object.keys(gms).length+' game(s)';
+    var nb=document.getElementById('noblund');
+    if(nb){
+      nb.hidden = shown>0;
+      if(!shown) nb.innerHTML = clean
+        ? '<b>You played this game clean.</b> Nothing in it lost 6 points or '+
+          'more, and no move dropped your win rate by 15%, so there is no card '+
+          'to practise \u2014 the win-rate curve below is the whole story.'
+        : 'Nothing matches these filters. Widen one of them, or press '+
+          '<b>All</b> on the row you narrowed last.';
+    }
+    showCurve(clean ? [clean] : Object.keys(gms), visIds);
   }
 
   // Down to one game -> show that game's win-rate curve above the cards. With
@@ -493,7 +512,7 @@ PRACTICE_JS = """
   // these accumulate. "All" is not one of the values, it is the reset.
   (function wireOpp(){
     var btns=document.querySelectorAll('.navbtn[data-fo]');
-    if(!btns.length) return;                 // single-opponent report: no row
+    if(!btns.length) return;                 // single-game report: no row
     function paint(){
       btns.forEach(function(b){
         var v=b.getAttribute('data-fo');
@@ -961,20 +980,31 @@ th{color:#718096;font-weight:600}
 .wrmk:hover rect{stroke:#1a202c}
 .navbtn{font:inherit;font-size:12px;cursor:pointer;border:1px solid var(--line);
  background:var(--card);color:var(--ink);border-radius:14px;padding:4px 11px}
-/* Opponent chips, tinted by how those games went -- green if you beat them every
-   time, red if they beat you every time (mixed records stay neutral and show a
-   W-L badge instead).  These sit *above* :hover and .on deliberately: all three
-   are one-class-plus-one specificity, so source order is what lets selecting a
-   chip still turn it gold. */
+/* Opponent chips -- one per game, tinted by how it went: green won, red lost,
+   blue for a game with no blunders in it at all.  Blue rather than a third shade
+   of green because that game is the one worth noticing, and it is picked for the
+   opposite reason to every other chip: there is nothing in it to review.
+   These sit *above* :hover and .on deliberately: all of them are
+   one-class-plus-one specificity, so source order is what lets selecting a chip
+   still turn it gold. */
 .navbtn.wlw{background:#f0fbf4;border-color:#9ae6b4;color:#276749}
 .navbtn.wll{background:#fff5f5;border-color:#feb2b2;color:#9b2c2c}
+.navbtn.wlc{background:#ebf8ff;border-color:#90cdf4;color:#2b6cb0}
 .navbtn:hover{background:var(--amber-soft);border-color:var(--amber-line)}
 .navbtn.on{background:var(--amber);border-color:var(--amber);color:#fff}
 .navbtn i{font-style:normal;opacity:.7;font-size:11px;margin-left:3px}
 .navbtn.on i{opacity:.9}
-.wlrec{font-style:normal;font-size:10.5px;font-weight:700;margin-left:5px}
-.wlrec .w{color:#2f855a}.wlrec .l{color:#c53030}
-.navbtn.on .wlrec .w,.navbtn.on .wlrec .l{color:#fff;opacity:.9}
+/* The result letter and the #n repeat the chip's colour rather than adding one:
+   colour alone is not readable by everyone, or in a screenshot. */
+.wlres{font-style:normal;font-size:10px;font-weight:700;margin-left:5px;
+ letter-spacing:.03em;opacity:.72}
+.gno{font-style:normal;font-weight:700;opacity:.55;font-size:11px}
+/* Nothing matched the filters. Its main customer is a clean game, where an empty
+   grid is the answer rather than a dead end. */
+.nobl{font-size:13px;color:#4a5568;background:var(--line-soft);
+ border:1px dashed var(--line);border-radius:10px;padding:14px 16px;
+ margin:0 0 16px;line-height:1.55}
+.nobl[hidden]{display:none}
 .datebar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0 14px;
  padding:9px 12px;background:var(--line-soft);border:1px solid var(--line);
  border-radius:10px}

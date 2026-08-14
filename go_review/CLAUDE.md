@@ -248,13 +248,18 @@ that plus which config keys to refill.
   here** — browsing is just browsing.
   The **Opponent** row is the only **multi-select** filter (`fo` is `null` or a
   `Set` of slugs, wired by `wireOpp`, not by the single-select `wire` helper);
-  "All" is its reset, and turning the last opponent off falls back to All rather
-  than hiding every card. Names are **slugged** (`o0`, `o1`, …) like `cat_slug`,
-  because `recount` looks the counters up with `i[data-co="<value>"]` and a
-  nickname containing a quote or bracket would break that selector. The row is
-  suppressed entirely when a report has only one opponent. Chips are ordered
-  **most recently played first** (each opponent placed by their latest game),
-  matching Game-by-game and Trajectory. The key is `data.game_time`, which
+  "All" is its reset, and turning the last chip off falls back to All rather
+  than hiding every card. **One chip is one *game*, not one opponent** (it was
+  per-opponent until 2026-08-14): two games against the same person are two
+  different games, and merging them forced the row to sum their blunders and to
+  give up on colouring a mixed record. `opp_slug` is therefore keyed by
+  **filename** (`o0`, `o1`, …) like `cat_slug`, because `recount` looks the
+  counters up with `i[data-co="<value>"]` and a nickname containing a quote or
+  bracket would break that selector; `nth` adds `#1`/`#2` (numbered
+  **oldest-first**, so a number is stable when a later game is imported) only
+  where a name repeats. The row is suppressed entirely when a report has only
+  one game. Chips are ordered **most recently played first**, matching
+  Game-by-game and Trajectory. The key is `data.game_time`, which
   resolves a game to **epoch seconds** rather than a day: several games a day is
   the normal case, so `date_key` alone would tie most of the row. It reads the
   clock out of the filename — a LizzieYZY timestamp (`..._20260805230922.sgf`)
@@ -263,14 +268,22 @@ that plus which config keys to refill.
   `pages._game_recency_key`, which compares the raw trailing digits and would
   therefore sort every 19-digit Fox id after every 14-digit timestamp; that is
   latent only because no report currently mixes the two sources.
-  Chips are **tinted by
-  the win/loss record** of the games behind them (`opp_rec`, counted per *game*
-  via a `(opp, filename)` dedup set, not per blunder): `.wlw` green for an
-  all-win record, `.wll` red for an all-loss one, no tint for a mixed record,
-  which gets a `.wlrec` W-L badge instead (also shown for any uniform record
-  spanning more than one game). The three `.navbtn` variants all have
-  one-class-plus-one specificity, so **`.wlw`/`.wll` must stay above `:hover`
-  and `.on` in the stylesheet** or a selected chip stops turning gold.
+  Chips are **tinted by the result**: `.wlw` green won, `.wll` red lost, plus a
+  `.wlres` `W`/`L` letter so the row survives a screenshot or colour-blindness.
+  **`.wlc` blue is a game with no blunders at all** — it has no cards, so it is
+  built from `games` rather than from `built`, and `game_blunders` (counted
+  *before* `practice_hidden.json` is applied) is what tells a genuinely clean
+  game from one whose blunders were all deleted; only the first is blue, the
+  second keeps its win/loss colour with a count of 0. Do not merge those two.
+  All the `.navbtn` variants have
+  one-class-plus-one specificity, so **`.wlw`/`.wll`/`.wlc` must stay above
+  `:hover` and `.on` in the stylesheet** or a selected chip stops turning gold.
+  Selecting a clean chip is the one case where **zero cards is the right
+  answer**: `apply()` spots it via `data-clean` on the lone selected chip, feeds
+  `data-gamefile` to `showCurve` so the curve still appears, and fills
+  `#noblund` (`.nobl`) — which otherwise carries the generic "nothing matches
+  these filters" message. A `.wrbox` is now emitted for **every** game for the
+  same reason.
   **`goSim` must reset it** along with the other filters — the similar position is usually from a
   different game, so otherwise "Same move missed →" scrolls to a hidden card.
   **When any filter combination narrows the cards down to one game**, that
@@ -349,9 +362,15 @@ that plus which config keys to refill.
 
 ## Current state (as of this handoff)
 
-- Reports present: `yehu_3d_r2` (new, full), `yehu_4d`, `yehu_3d`.
-- `yehu_4d` and `yehu_3d` have their **blunder set cleared** (`practice_cleared` present) — the user
-  finished reviewing them; restore via the ↻ button if needed.
+- Reports present (5): `yehu_3d_r3` (10 games, newest), `yehu_4d_r2` (20),
+  `yehu_3d_r2` (17), `yehu_3d` (70), `yehu_4d` (62). **Re-derive this list
+  rather than trusting it** — `ls -d go_review/yehu_*/`; it was stale before and
+  a rebuild loop that misses a report leaves the user looking at old HTML.
+- `yehu_3d`, `yehu_3d_r2` and `yehu_4d` have **every blunder deleted** (all keys
+  in `practice_hidden.json`, *not* the retired `practice_cleared` marker — none
+  of them has that file) — the user finished reviewing them, so
+  `practice_section` takes its early return and those reports have no filter
+  rows at all. Restore via the ↻ button if needed.
 - All reports rebuilt after the English translation; `index.html` regenerated.
 - **Stale Chinese data:** `yehu_3d_r2/review_summary.md` and
   `yehu_4d/review_summary.md` are cached DeepSeek output from *before* the prompt

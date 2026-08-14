@@ -55,26 +55,40 @@ The rows above the cards narrow the set down: **Phase**, **Type**, **Points lost
 **Win-rate drop**, **Status** (to review / mastered) and **Opponent**. They combine,
 so "middlegame misreads of 10+ points against one player" is three clicks.
 
-**Opponent is the one row you can pick several of** — click as many names as you
+**Opponent is the one row you can pick several of** — click as many chips as you
 like and they add up, which is what you want when several of them play the same
-way. Clicking **All** clears the selection, and so does turning off the last name
-you had chosen. A report with only one opponent gets no row, since there would
-be nothing to choose.
+way. Clicking **All** clears the selection, and so does turning off the last chip
+you had chosen. A report with a single game gets no row, since there would be
+nothing to choose.
 
-Opponents are listed **most recently played first**, matching Game by game and
-Trajectory, so the player you want after an evening's Go is at the left end. The
+**One chip is one game, not one opponent.** Two games against the same person are
+two different games — you may have been crushed in one and comfortable in the
+other — and merging them meant the row could not say so: it had to sum their
+blunders and give up on colouring a mixed record. Where a name repeats, the chips
+are numbered `#1`, `#2` in the order you played them, so `波波哥哥 #1` is the same
+game tomorrow as it is today.
+
+Games are listed **most recently played first**, matching Game by game and
+Trajectory, so the one you want after an evening's Go is at the left end. The
 order goes down to the minute, not just the day — the clock time comes out of the
 SGF filename (LizzieYZY writes a timestamp, Fox a game id that opens with one),
 because the date recorded inside the game is only ever a day and you often play
 several in one. The blunder count is still printed on every chip.
 
-**The chips are coloured by how those games went** — green if you beat that player
-every time, red if they beat you every time — so the row answers "who actually
-gives me trouble" as well as "where did I blunder most". Wins and losses are
-counted per *game*, not per blunder: one messy game against someone is not a
-losing record against them. A mixed record stays uncoloured and shows a small
-`2-1` badge instead, because one colour would have to lie about half of it.
-Hovering any chip spells the record out.
+**The chips are coloured by how the game went** — green you won it, red you lost
+it — so the row answers "where do I actually come unstuck" as well as "where did
+I blunder most". The colour is repeated as a `W` or `L`, because a colour alone
+is not readable by everyone, or in a screenshot. Hovering a chip gives the
+opponent, the date and which meeting it was.
+
+**A game you played clean gets a blue chip and stays on the row.** It has no
+blunder cards, so it never used to appear at all — which quietly turned "ten
+games analysed" into nine, and hid the one result worth being pleased about. It
+is blue rather than a third green because it is picked for the opposite reason to
+every other chip: there is nothing in it to review. Selecting it shows the game's
+win-rate curve and says so in words, instead of an empty strip that reads as a
+bug. Note that a game whose blunders you have *deleted* is not the same thing and
+is not blue — it keeps its win/loss colour and simply counts 0.
 
 **Once the filters leave you with a single game, its win-rate curve appears above
 the cards** — the context a cropped diagram cannot give you, which is whether a
@@ -82,6 +96,9 @@ blunder threw the game or merely dented a position you had already won. Each
 blunder still showing below is marked in red on the curve, so narrowing to
 "≥ 15 points" leaves only those marks; click one to jump to its card. Any route
 to one game works, including the date range at the top of the report.
+
+When a combination of filters matches nothing, the section says which one to
+widen rather than leaving a blank space.
 
 ### Voice review & the review summary
 
