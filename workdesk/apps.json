@@ -74,6 +74,20 @@
       "_timeout_note": "The 180s default is sized for a password dialog. This one waits on two file dialogs and then a real encode, so a long recording plus a coffee break would otherwise be killed mid-write."
     },
     {
+      "id": "laggard",
+      "name": "Laggard Rotation",
+      "emoji": "📉",
+      "note": "Today's signal for the five A-share AI names, plus the research it came from. Fetches fresh daily bars on launch.",
+      "_browser_note": "--no-browser because the card already has an Open button; double-clicking start.sh on its own still opens a tab.",
+      "command": "./start.sh --no-browser",
+      "cwd": "~/Desktop/Laggard",
+      "probe": {
+        "type": "port",
+        "port": 8610
+      },
+      "url": "http://127.0.0.1:8610/"
+    },
+    {
       "id": "lizzie",
       "name": "LizzieYZY",
       "icon": "goban",
