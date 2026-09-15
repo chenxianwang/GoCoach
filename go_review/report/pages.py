@@ -7,7 +7,7 @@ from .constants import PTS_BLUNDER
 from .assets import GAMES_JS
 from .data import blunder_count, date_key, esc, parse_date
 from .board import final_score_html, full_board_svg, score_svg
-from .charts import metric_hist_svg, moves_hist_svg
+from .charts import all_games_wr_section, metric_hist_svg, moves_hist_svg
 
 
 def _home_page(agg, chron=None):
@@ -69,6 +69,31 @@ def _game_recency_key(g):
     return (date_key(g), cid)
 
 
+def _wr_record(g):
+    """One game's win-rate curve, compacted for the all-games overlay.
+
+    Win rate is from the user's own side and rounded to whole percent -- the
+    chart is 256px tall, so tenths would only make the report bigger.  `m0`/`m1`
+    are the first and last move analysed, which is what puts the curve on the
+    shared move-number axis.
+    """
+    uc = g.get("user_color")
+    xs, ws = [], []
+    for t in g.get("timeline", []):
+        bw, mv = t.get("black_winrate"), t.get("move_number")
+        if bw is None or mv is None:
+            continue
+        xs.append(mv)
+        ws.append(round((bw if uc == "B" else 1.0 - bw) * 100))
+    won = g.get("won")
+    res = "win" if won is True else "loss" if won is False else "na"
+    tip = (f"{g.get('date','')} vs {g.get('opponent','')} \u2014 "
+           f"{'Win' if won is True else 'Loss' if won is False else '?'} as "
+           f"{'Black' if uc == 'B' else 'White'}, {len(ws)} moves")
+    return {"w": ws, "m0": xs[0] if xs else 0, "m1": xs[-1] if xs else 0,
+            "r": res, "t": tip}
+
+
 def _games_page(games):
     p = ["<h2>Game by game</h2>",
          "<p class='sub'>Newest game first. Use the filters below to narrow it down.</p>",
@@ -93,8 +118,12 @@ def _games_page(games):
          "<button class='navbtn' data-fa='4'>&ge; 4 pts</button></div>",
          "</div>",
          "<div class='flcount' id='gmcount'></div>"]
+    ordered = sorted(games, key=_game_recency_key, reverse=True)
+    # One chart of the whole project before the game-by-game cards: the filters
+    # above narrow it the same way they narrow the cards.
+    p.append(all_games_wr_section([_wr_record(g) for g in ordered]))
     fbk = 0  # page-wide unique id for the expandable full-board rows
-    for gi, g in enumerate(sorted(games, key=_game_recency_key, reverse=True)):
+    for gi, g in enumerate(ordered):
         wl = g.get("won")
         wl_html = ("<span class='win'>Win</span>" if wl is True else
                    "<span class='loss'>Loss</span>" if wl is False else "")
@@ -105,7 +134,7 @@ def _games_page(games):
             avg = 0.0
         _gd = parse_date(g)
         _gd = _gd.isoformat() if _gd else ""
-        p.append(f"<div class='game' data-result='{res}' "
+        p.append(f"<div class='game' data-gi='{gi}' data-result='{res}' "
                  f"data-date='{_gd}' "
                  f"data-color='{g.get('user_color','')}' "
                  f"data-blunders='{blunder_count(g)}' "

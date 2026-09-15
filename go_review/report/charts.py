@@ -941,6 +941,195 @@ def game_wr_chart(g, marks=(), width=760, height=210):
     return "".join(p)
 
 
+def all_games_wr_section(curves):
+    """Every game's win-rate curve on one pair of axes, plus their average.
+
+    The per-game score graphs further down say where a single game turned; this
+    says what the games look like *as a group* -- whether you tend to lead early
+    and hand it back, or start slow and grind.  Drawn client-side because the
+    filters above it decide which games are in it: the chart has to show exactly
+    the games that "Showing N game(s)" is counting, including the date range.
+
+    `curves` is one record per game in page order -- the index is that game
+    card's `data-gi`.  Win rates are whole percents from the user's own side.
+    """
+    if sum(1 for c in curves if len(c["w"]) > 1) < 2:
+        return ""            # a single curve is not an overlay; its card has it
+    js = r"""
+<div class='wrall'>
+  <div class='wrhd'>All games &middot; win-rate curves<span class='wrsub'
+   id='wrAllSub'></span></div>
+  <div id='wrAllBox'></div>
+  <p class='wrft' id='wrAllNote'></p>
+</div>
+<script>
+(function(){
+  var C=__WRC__;
+  var box=document.getElementById('wrAllBox');
+  var sub=document.getElementById('wrAllSub');
+  var note=document.getElementById('wrAllNote');
+  if(!box) return;
+  var W=880,H=300,PL=44,PR=16,PT=14,PB=30;
+  var pw=W-PL-PR, ph=H-PT-PB;
+  var COL={win:'#2f855a',loss:'#c53030',na:'#718096'};
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function pctl(a,f){ return a[Math.round(f*(a.length-1))]; }
+  // KataGo's evaluation bounces from ply to ply in a fight -- at 300 visits one
+  // reading can swing it 30 points -- and 35 raw curves stack up into a
+  // hairball. A five-move centred average drops that jitter while keeping every
+  // real cliff: at this scale a blunder is still a cliff three moves wide.
+  function smooth(a,k){
+    var o=[];
+    for(var i=0;i<a.length;i++){
+      var s=0,n=0;
+      for(var j=Math.max(0,i-k);j<=Math.min(a.length-1,i+k);j++){ s+=a[j]; n++; }
+      o.push(s/n);
+    }
+    return o;
+  }
+  // Cached on the record: it does not depend on which games are selected, and
+  // every filter click redraws every curve.
+  function wOf(c){ if(!c.s) c.s=smooth(c.w,2); return c.s; }
+  // A curve carries one sample per analysed ply, so sample i sits at move
+  // m0 + i*(m1-m0)/(n-1): exact for the usual unbroken timeline, and evenly
+  // spread rather than wrong when the analysis skipped a ply.
+  function mvAt(c,i){
+    return c.w.length>1 ? c.m0+i*(c.m1-c.m0)/(c.w.length-1) : c.m0;
+  }
+  function valAt(c,m){
+    if(m<c.m0||m>c.m1) return null;
+    var i = (c.m1>c.m0) ? Math.round((m-c.m0)/(c.m1-c.m0)*(c.w.length-1)) : 0;
+    return wOf(c)[i]/100;
+  }
+  function draw(sel){
+    var gs=[];
+    for(var k=0;k<sel.length;k++){
+      var c=C[sel[k]];
+      if(c && c.w && c.w.length>1) gs.push({gi:sel[k], c:c});
+    }
+    if(!gs.length){
+      box.innerHTML="<p class='sub'>No games in this selection.</p>";
+      if(sub) sub.textContent='';
+      if(note) note.textContent='';
+      return;
+    }
+    var maxMv=1, minMv=1e9;
+    gs.forEach(function(g){
+      if(g.c.m1>maxMv) maxMv=g.c.m1;
+      if(g.c.m0<minMv) minMv=g.c.m0;
+    });
+    function px(mv){ return PL+mv/maxMv*pw; }
+    function py(v){ return PT+(1-v)*ph; }
+    var p=['<svg viewBox="0 0 '+W+' '+H+'" width="100%" '+
+      'preserveAspectRatio="xMidYMid meet" style="background:#fff;'+
+      'border:1px solid #e3e3e3;border-radius:8px">'];
+    // Winning half tinted green, losing half red, the same as the single-game
+    // curve on the Blunders page -- "above the line" reads without the axis.
+    p.push('<rect x="'+PL+'" y="'+PT+'" width="'+pw+'" height="'+(ph/2).toFixed(1)+
+      '" fill="#2f855a" fill-opacity="0.05"/>');
+    p.push('<rect x="'+PL+'" y="'+(PT+ph/2).toFixed(1)+'" width="'+pw+'" height="'+
+      (ph/2).toFixed(1)+'" fill="#c53030" fill-opacity="0.05"/>');
+    for(var k=0;k<5;k++){
+      var v=k/4, y=py(v);
+      p.push('<line x1="'+PL+'" y1="'+y.toFixed(1)+'" x2="'+(W-PR)+'" y2="'+
+        y.toFixed(1)+'" stroke="'+(k===2?'#b7a98f':'#eee')+'"'+
+        (k===2?' stroke-dasharray="3 3"':'')+'/>');
+      p.push('<text x="'+(PL-6)+'" y="'+(y+3).toFixed(1)+'" font-size="10" '+
+        'text-anchor="end" fill="#888">'+(v*100)+'%</text>');
+    }
+    var step = maxMv>240?50:(maxMv>120?25:10);
+    for(var mk=step;mk<maxMv;mk+=step){
+      var gx=px(mk);
+      p.push('<line x1="'+gx.toFixed(1)+'" y1="'+PT+'" x2="'+gx.toFixed(1)+
+        '" y2="'+(PT+ph).toFixed(1)+'" stroke="#f2f2f2"/>');
+      p.push('<text x="'+gx.toFixed(1)+'" y="'+(H-PB+15)+'" font-size="10" '+
+        'fill="#888" text-anchor="middle">'+mk+'</text>');
+    }
+    p.push('<text x="'+(W-PR)+'" y="'+(H-4)+'" font-size="9.5" fill="#aaa" '+
+      'text-anchor="end">move number</text>');
+    // The individual games. Faint enough that sixty of them still read as one
+    // shape, strong enough that three are followable.
+    var op=Math.max(0.14, Math.min(0.55, 7/gs.length));
+    gs.forEach(function(g){
+      var c=g.c, w=wOf(c), pts=[];
+      for(var i=0;i<w.length;i++)
+        pts.push(px(mvAt(c,i)).toFixed(1)+','+py(w[i]/100).toFixed(1));
+      p.push('<polyline class="pt wrl" data-gi="'+g.gi+'" data-tip="'+esc(c.t)+
+        '" fill="none" stroke="'+(COL[c.r]||COL.na)+'" stroke-width="1.3" '+
+        'stroke-opacity="'+op.toFixed(2)+'" stroke-linejoin="round" points="'+
+        pts.join(' ')+'"/>');
+    });
+    // The integrated curve: the average over the games still running at that
+    // move, with the middle half of them shaded.  It stops once fewer than
+    // three games are left, so the tail cannot be one long game posing as a
+    // trend -- and the games that run longest are exactly the close ones.
+    var segs=[], cur=null, endMv=0;
+    for(var m=minMv;m<=maxMv;m++){
+      var vals=[];
+      for(var j=0;j<gs.length;j++){
+        var v2=valAt(gs[j].c,m);
+        if(v2!=null) vals.push(v2);
+      }
+      if(vals.length>=3){
+        vals.sort(function(a,b){ return a-b; });
+        var s=0;
+        for(var q=0;q<vals.length;q++) s+=vals[q];
+        if(!cur){ cur=[]; segs.push(cur); }
+        cur.push([m, s/vals.length, pctl(vals,0.25), pctl(vals,0.75)]);
+        endMv=m;
+      } else { cur=null; }
+    }
+    segs.forEach(function(sg){
+      if(sg.length<2) return;
+      var xs=sg.map(function(r){ return px(r[0]); });
+      var mid=smooth(sg.map(function(r){ return r[1]; }),2);
+      var lo=smooth(sg.map(function(r){ return r[2]; }),2);
+      var hi=smooth(sg.map(function(r){ return r[3]; }),2);
+      var up=[], dn=[];
+      for(var i=0;i<xs.length;i++) up.push(xs[i].toFixed(1)+','+py(hi[i]).toFixed(1));
+      for(var i=xs.length-1;i>=0;i--) dn.push(xs[i].toFixed(1)+','+py(lo[i]).toFixed(1));
+      p.push('<path d="M '+up.concat(dn).join(' L ')+' Z" fill="#2d3748" '+
+        'fill-opacity="0.09"/>');
+      p.push('<polyline fill="none" stroke="#1a202c" stroke-width="2.6" '+
+        'stroke-linejoin="round" points="'+xs.map(function(x,i){
+          return x.toFixed(1)+','+py(mid[i]).toFixed(1); }).join(' ')+'"/>');
+    });
+    p.push('</svg>');
+    box.innerHTML=p.join('');
+    var nw=0, nl=0;
+    gs.forEach(function(g){ if(g.c.r==='win') nw++; else if(g.c.r==='loss') nl++; });
+    if(sub) sub.textContent=gs.length+' game'+(gs.length===1?'':'s')+
+      ' · '+nw+'W – '+nl+'L';
+    if(note) note.textContent='Every game above, on one pair of axes, as your '+
+      'own win rate: green = a game you won, red = one you lost. The dark line '+
+      'is the average across the games still being played at that move'+
+      (endMv? ' (it stops at move '+endMv+', where fewer than three are left)':'')+
+      ', and the grey band is the middle half of them. Above the dashed line '+
+      'you are winning. Every curve is averaged over five moves so that this '+
+      'many of them can be read at once -- the game cards below have each one '+
+      'move by move. Hover a curve to see which game it is, click it to jump '+
+      'to that game.';
+  }
+  box.addEventListener('click', function(e){
+    var t=e.target;
+    var gi=(t && t.getAttribute) ? t.getAttribute('data-gi') : null;
+    if(gi===null) return;
+    var card=document.querySelector("#page-games .game[data-gi='"+gi+"']");
+    if(card) card.scrollIntoView({behavior:'smooth', block:'start'});
+  });
+  window.GWR={draw:draw};
+  // Drawn once with everything, so the chart is never blank if the filter
+  // script is not there; the filter redraws it with its own selection.
+  var all=[];
+  for(var i=0;i<C.length;i++) all.push(i);
+  draw(all);
+})();
+</script>
+"""
+    return js.replace("__WRC__", json.dumps(curves, separators=(",", ":")))
+
+
 def _traj_spark(w, won, width=200, height=54):
     """Small win-rate sparkline (user perspective, 0..1) with a 50% guide."""
     if not w:

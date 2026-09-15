@@ -500,7 +500,9 @@ PRACTICE_JS = """
   // is nothing to say. The markers follow the filters too: a chart marking
   // blunders that are not on screen would misreport what you are looking at.
   function showCurve(games, visIds){
-    var boxes=document.querySelectorAll('.wrbox');
+    // Scoped to this page: every .wrbox belongs to the Blunders section, and an
+    // unscoped selector silently hid a same-classed chart on another page.
+    var boxes=document.querySelectorAll('#page-practice .wrbox');
     if(!boxes.length) return;
     var only = games.length===1 ? games[0] : null;
     boxes.forEach(function(w){
@@ -1025,6 +1027,15 @@ th{color:#718096;font-weight:600}
 .wrft{font-size:11.5px;color:#718096;margin-top:5px}
 .wrmk .pt{cursor:pointer}
 .wrmk:hover rect{stroke:#1a202c}
+/* The all-games overlay on the Game-by-game page. Deliberately NOT a .wrbox:
+   showCurve() owns every .wrbox in the document and hides the ones that are not
+   the single selected game, which switched this off the moment the Blunders
+   page ran its filter. Same typography (.wrhd/.wrsub/.wrft), own container. */
+.wrall{display:block;margin:0 0 18px}
+/* Each curve is faint on purpose -- the shape of the whole pile is what it is
+   for -- so hovering has to pick one back out of it. */
+.wrall .wrl{cursor:pointer}
+.wrall .wrl:hover{stroke-opacity:1;stroke-width:2.4}
 .navbtn{font:inherit;font-size:12px;cursor:pointer;border:1px solid var(--line);
  background:var(--card);color:var(--ink);border-radius:14px;padding:4px 11px}
 /* Opponent chips -- one per game, tinted by how it went: green won, red lost,
@@ -1275,7 +1286,7 @@ GAMES_JS = """
 (function(){
   var fr='all', fc='all', fb=0, fa=0;
   function apply(){
-    var shown=0;
+    var shown=0, sel=[];
     document.querySelectorAll('#page-games .game').forEach(function(d){
       var okr = fr==='all' || d.getAttribute('data-result')===fr;
       var okc = fc==='all' || d.getAttribute('data-color')===fc;
@@ -1284,10 +1295,12 @@ GAMES_JS = """
       var okdt = (window.GR ? GR.inRange(d.getAttribute('data-date')) : true);
       var vis = okr && okc && okb && oka && okdt;
       d.style.display = vis ? '' : 'none';
-      if(vis) shown++;
+      if(vis){ shown++; sel.push(parseInt(d.getAttribute('data-gi'),10)); }
     });
     var el=document.getElementById('gmcount');
     if(el) el.textContent='Showing '+shown+' game(s)';
+    // The overlay chart draws exactly the games this count claims.
+    if(window.GWR) GWR.draw(sel);
   }
   function wire(attr, set){
     document.querySelectorAll('#page-games .navbtn['+attr+']').forEach(function(b){
