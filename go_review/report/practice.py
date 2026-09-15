@@ -196,7 +196,9 @@ def practice_section(games, hidden=None, cleared=False):
                    "title='One chip per game, most recently played first; "
                    "#1, #2 tell repeat meetings apart. Pick as many as you "
                    "like -- they combine. Green = you won it, red = you lost "
-                   "it, blue = no blunders at all'>Opponent</span>")
+                   "it, blue = no blunders at all. A game drops off the row "
+                   "once you have deleted every one of its positions'>"
+                   "Opponent</span>")
         nav.append("<button class='navbtn on' data-fo='all' "
                    "title='Every game'>All "
                    f"<i data-co='all'>{len(built)}</i></button>")
@@ -228,6 +230,20 @@ def practice_section(games, hidden=None, cleared=False):
                        f" Click more than one to combine them'>{label} "
                        f"<i data-co='{slug}'>{opp_count.get(fn, 0)}</i>"
                        f"{res}</button>")
+        # A clean game's chip is a note, not a filter: there is nothing behind
+        # it to review.  Worth keeping on the row -- it is the one game that
+        # went right -- but worth being able to put away while you work through
+        # the ones that did not.  Only offered when there is something to put
+        # away.  The label is written by the JS, which owns the toggle state.
+        n_clean = sum(1 for g in order
+                      if game_blunders.get(g.get("filename", ""), 0) == 0)
+        if n_clean:
+            nav.append("<button type='button' class='navbtn clnbtn' "
+                       "id='clnTog' title='Games you played clean have no "
+                       "positions to review -- their chips only say the game "
+                       "went well. Hide them to leave just the games with "
+                       "something in them. Remembered between visits'>"
+                       "</button>")
         nav.append("</div>")
     nav.append("</div>")
 

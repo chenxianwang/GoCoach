@@ -367,6 +367,13 @@ PRACTICE_JS = """
   // Opponent is the one multi-select filter: null means "every opponent",
   // otherwise it is a Set of the chosen slugs.
   var fo=null;
+  // Set by wireOpp below. recount() needs it because dropping an emptied chip
+  // can also drop it out of `fo`, and the row has to redraw when that happens.
+  var paintOpp=null;
+  // Put the clean games' chips away. Not a filter (they have no cards either
+  // way) -- purely whether the row shows them. Remembered per browser.
+  var CLNKEY='go_review_hideclean', hideClean=false;
+  try{ hideClean = localStorage.getItem(CLNKEY)==='1'; }catch(e){}
 
   // Mastered positions persist in the browser, keyed by game+move so the state
   // survives regenerating the report.
@@ -406,8 +413,33 @@ PRACTICE_JS = """
       var v=el.getAttribute('data-cp'); if(v!=='all') el.textContent=byPhase[v]||0; });
     document.querySelectorAll('i[data-cc]').forEach(function(el){
       var v=el.getAttribute('data-cc'); if(v!=='all') el.textContent=byCat[v]||0; });
+    // A game whose positions you have all deleted has nothing left to filter
+    // to, so its chip comes off the row rather than sitting there at 0 as a
+    // dead target. A game you played *clean* also counts 0 but is a different
+    // fact -- "no blunders in this one" is worth reading, and clicking it says
+    // so -- so it stays until you ask for clean games to be put away.
+    var dropped=false, nClean=0;
     document.querySelectorAll('i[data-co]').forEach(function(el){
-      var v=el.getAttribute('data-co'); if(v!=='all') el.textContent=byOpp[v]||0; });
+      var v=el.getAttribute('data-co'); if(v==='all') return;
+      var n=byOpp[v]||0;
+      el.textContent=n;
+      var b=el.closest ? el.closest('.navbtn') : null; if(!b) return;
+      var clean = b.getAttribute('data-clean')==='1';
+      if(clean) nClean++;
+      var gone = clean ? hideClean : n===0;
+      b.hidden = gone;
+      // Still filtering by a chip that is no longer on the row would hide every
+      // card with no visible way to undo it.
+      if(gone && fo && fo.has(v)){ fo.delete(v); dropped=true; }
+    });
+    if(dropped){ if(!fo.size) fo=null; if(paintOpp) paintOpp(); }
+    var tog=document.getElementById('clnTog');
+    if(tog){
+      tog.hidden = !nClean;
+      tog.classList.toggle('off', hideClean);
+      tog.innerHTML = (hideClean ? 'Show clean games' : 'Hide clean games')
+        + " <i>" + nClean + "</i>";
+    }
     var ct=document.getElementById('cnt-todo'); if(ct) ct.textContent=todo;
     var cd=document.getElementById('cnt-done'); if(cd) cd.textContent=done;
   }
@@ -513,6 +545,7 @@ PRACTICE_JS = """
   (function wireOpp(){
     var btns=document.querySelectorAll('.navbtn[data-fo]');
     if(!btns.length) return;                 // single-game report: no row
+    paintOpp=paint;
     function paint(){
       btns.forEach(function(b){
         var v=b.getAttribute('data-fo');
@@ -533,6 +566,20 @@ PRACTICE_JS = """
         paint();
         apply();
       });
+    });
+  })();
+
+  // The clean-games toggle. Deliberately not part of wireOpp: it is a control,
+  // not one more value on the row, and it changes nothing about which cards
+  // match -- only which chips are on offer. recount() does the painting.
+  (function wireClean(){
+    var tog=document.getElementById('clnTog');
+    if(!tog) return;                         // no clean game in this report
+    tog.addEventListener('click', function(){
+      hideClean=!hideClean;
+      try{ localStorage.setItem(CLNKEY, hideClean?'1':'0'); }catch(e){}
+      recount();
+      apply();                               // hiding may have dropped an fo
     });
   })();
 
@@ -994,6 +1041,17 @@ th{color:#718096;font-weight:600}
 .navbtn.on{background:var(--amber);border-color:var(--amber);color:#fff}
 .navbtn i{font-style:normal;opacity:.7;font-size:11px;margin-left:3px}
 .navbtn.on i{opacity:.9}
+/* An opponent chip left with no positions is hidden by recount(). Spelled out
+   rather than leaning on the UA sheet, the way .wrbox and .nobl are. */
+.navbtn[hidden]{display:none}
+/* The clean-games toggle. Dashed and muted so it does not read as one more
+   chip to pick -- it is the row's own control. After :hover/.on above, which
+   it ties with on specificity, so source order is what makes it stick. */
+.navbtn.clnbtn{border-style:dashed;background:transparent;color:#718096;
+ margin-left:6px}
+.navbtn.clnbtn.off{color:#a0aec0}
+.navbtn.clnbtn:hover{background:var(--line-soft);border-color:var(--amber-line);
+ color:#4a5568}
 /* The result letter and the #n repeat the chip's colour rather than adding one:
    colour alone is not readable by everyone, or in a screenshot. */
 .wlres{font-style:normal;font-size:10px;font-weight:700;margin-left:5px;
